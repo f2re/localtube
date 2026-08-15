@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   apply:
-    if: github.event.head_commit.message != 'fix: finalize resilient bootstrap 1.4.1'
+    if: ${{ github.event.head_commit.message != 'fix: finalize resilient bootstrap 1.4.1' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
