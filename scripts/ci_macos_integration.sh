@@ -56,7 +56,7 @@ done
 /usr/bin/curl -fsS --max-time 3 -H "X-LocalTube-Token: $TOKEN" "http://127.0.0.1:$PORT/api/health" | /usr/bin/grep -q '"ready":true'
 
 echo '[macOS 5/7] live YouTube extraction diagnostic'
-DIAG_JSON="$(/usr/bin/curl -fsS --max-time 45 -H "X-LocalTube-Token: $TOKEN" -X POST "http://127.0.0.1:$PORT/api/diagnostics/youtube")"
+DIAG_JSON="$(/usr/bin/curl -fsS --max-time 45 -H "X-LocalTube-Token: $TOKEN" -X POST "http://127.0.0.1:$PORT/api/diagnostics")"
 printf '%s\n' "$DIAG_JSON"
 YT_RESULT="$(printf '%s' "$DIAG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin)["diagnostics"]["youtube"]; print("ok" if d.get("ok") else "fail"); print(d.get("detail", ""))')"
 YT_STATE="$(printf '%s\n' "$YT_RESULT" | /usr/bin/head -n 1)"
