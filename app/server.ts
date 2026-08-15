@@ -61,7 +61,8 @@ const YTDLP = `${RUNTIME_DIR}/yt-dlp`;
 const FFMPEG = `${RUNTIME_DIR}/ffmpeg`;
 const FFPROBE = `${RUNTIME_DIR}/ffprobe`;
 const DENO_BIN = `${RUNTIME_DIR}/deno`;
-const TEST_VIDEO_URL = 'https://www.youtube.com/watch?v=BaW_jenozKc';
+const TEST_VIDEO_ID = 'YE7VzlLtp-4';
+const TEST_VIDEO_URL = `https://www.youtube.com/watch?v=${TEST_VIDEO_ID}&t=1s&end=9`; // current yt-dlp upstream YouTube fixture
 
 function join(...parts: string[]): string {
   return parts.filter(Boolean).join('/').replace(/\/+/g, '/');
@@ -801,8 +802,8 @@ if (Deno.args.includes('--self-test')) {
     const mp4CompatibilityOk = videoArgs.some((v) => v.includes('[vcodec^=avc]')) && videoArgs.some((v) => v.includes('[acodec^=mp4a]'));
     const denoRuntimeOk = videoArgs.includes(`deno:${DENO_BIN}`) && videoArgs.includes('ejs:github');
     const audioOk = audioArgs.includes('--extract-audio') && audioArgs.includes('--audio-format');
-    const urlValidationOk = youtubeUrlOk(TEST_VIDEO_URL) && youtubeUrlOk('https://youtu.be/BaW_jenozKc') &&
-      youtubeUrlOk('https://www.youtube.com/shorts/BaW_jenozKc') && youtubeUrlOk('https://www.youtube.com/playlist?list=PL123') &&
+    const urlValidationOk = youtubeUrlOk(TEST_VIDEO_URL) && youtubeUrlOk(`https://youtu.be/${TEST_VIDEO_ID}`) &&
+      youtubeUrlOk(`https://www.youtube.com/shorts/${TEST_VIDEO_ID}`) && youtubeUrlOk('https://www.youtube.com/playlist?list=PL123') &&
       !youtubeUrlOk('https://www.youtube.com/@channel') && !youtubeUrlOk('https://youtube.com.evil.example/watch?v=x') && !youtubeUrlOk('file:///etc/passwd');
     const ok = Boolean(status.ready) && staticOk.every(Boolean) && commandOk && mp4CompatibilityOk && denoRuntimeOk && audioOk && urlValidationOk;
     console.log(JSON.stringify({

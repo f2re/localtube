@@ -1,6 +1,6 @@
 #!/bin/bash
 # Real macOS integration test: install the same runtime as production, start the
-# restricted Deno service and download yt-dlp's tiny public test video.
+# restricted Deno service and exercise yt-dlp's current upstream YouTube fixture.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 WORK="$(/usr/bin/mktemp -d -t localtube-ci.XXXXXX)"
@@ -62,7 +62,7 @@ printf '%s\n' "$DIAG" | /usr/bin/grep -q 'YouTube extraction OK' || { printf '%s
 echo '[macOS 6/7] end-to-end 360p download through HTTP API'
 PAYLOAD="$(python3 - "$DOWNLOADS" <<'PY'
 import json,sys
-print(json.dumps({"url":"https://www.youtube.com/watch?v=BaW_jenozKc","mode":"video","height":360,"download_dir":sys.argv[1],"video_container":"mp4","cookies_mode":"none","embed_metadata":False,"playlist":False}))
+print(json.dumps({"url":"https://www.youtube.com/watch?v=YE7VzlLtp-4&t=1s&end=9","mode":"video","height":360,"download_dir":sys.argv[1],"video_container":"mp4","cookies_mode":"none","embed_metadata":False,"playlist":False}))
 PY
 )"
 /usr/bin/curl -fsS --max-time 10 -H 'Content-Type: application/json' -H "X-LocalTube-Token: $TOKEN" -X POST --data "$PAYLOAD" "http://127.0.0.1:$PORT/api/jobs" >/dev/null
