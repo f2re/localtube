@@ -74,7 +74,7 @@ lt_python_download() {
 import ssl, sys, urllib.request
 url, dst, eff = sys.argv[1:4]
 ctx = ssl.create_default_context()
-req = urllib.request.Request(url, headers={"User-Agent": "LocalTube-bootstrap/1.4.2"})
+req = urllib.request.Request(url, headers={"User-Agent": "LocalTube-bootstrap/1.4.3"})
 with urllib.request.urlopen(req, timeout=60, context=ctx) as r, open(dst, "wb") as f:
     while True:
         chunk = r.read(1024 * 1024)
@@ -107,14 +107,14 @@ lt_download_common() {
       if [ -n "$_lt_effective_file" ]; then
         case "$_lt_mode" in
           normal)
-            if "$_lt_curl" --fail --location --silent --show-error --retry 4 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp"; then _lt_rc=0; else _lt_rc=$?; fi ;;
+            if "$_lt_curl" -q --fail --location --silent --show-error --retry 4 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp"; then _lt_rc=0; else _lt_rc=$?; fi ;;
           http1)
-            if "$_lt_curl" --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp"; then _lt_rc=0; else _lt_rc=$?; fi ;;
+            if "$_lt_curl" -q --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp"; then _lt_rc=0; else _lt_rc=$?; fi ;;
           ipv4)
-            if "$_lt_curl" --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 --ipv4 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp"; then _lt_rc=0; else _lt_rc=$?; fi ;;
+            if "$_lt_curl" -q --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 --ipv4 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp"; then _lt_rc=0; else _lt_rc=$?; fi ;;
           tls12)
             if lt_curl_has "$_lt_curl" '--tls-max'; then
-              if "$_lt_curl" --fail --location --silent --show-error --retry 2 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --tls-max 1.2 --http1.1 --ipv4 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp"; then _lt_rc=0; else _lt_rc=$?; fi
+              if "$_lt_curl" -q --fail --location --silent --show-error --retry 2 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --tls-max 1.2 --http1.1 --ipv4 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp"; then _lt_rc=0; else _lt_rc=$?; fi
             else
               continue
             fi ;;
@@ -122,14 +122,14 @@ lt_download_common() {
       else
         case "$_lt_mode" in
           normal)
-            if "$_lt_curl" --fail --location --silent --show-error --retry 4 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 "$_lt_url" --output "$_lt_part"; then _lt_rc=0; else _lt_rc=$?; fi ;;
+            if "$_lt_curl" -q --fail --location --silent --show-error --retry 4 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 "$_lt_url" --output "$_lt_part"; then _lt_rc=0; else _lt_rc=$?; fi ;;
           http1)
-            if "$_lt_curl" --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 "$_lt_url" --output "$_lt_part"; then _lt_rc=0; else _lt_rc=$?; fi ;;
+            if "$_lt_curl" -q --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 "$_lt_url" --output "$_lt_part"; then _lt_rc=0; else _lt_rc=$?; fi ;;
           ipv4)
-            if "$_lt_curl" --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 --ipv4 "$_lt_url" --output "$_lt_part"; then _lt_rc=0; else _lt_rc=$?; fi ;;
+            if "$_lt_curl" -q --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 --ipv4 "$_lt_url" --output "$_lt_part"; then _lt_rc=0; else _lt_rc=$?; fi ;;
           tls12)
             if lt_curl_has "$_lt_curl" '--tls-max'; then
-              if "$_lt_curl" --fail --location --silent --show-error --retry 2 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --tls-max 1.2 --http1.1 --ipv4 "$_lt_url" --output "$_lt_part"; then _lt_rc=0; else _lt_rc=$?; fi
+              if "$_lt_curl" -q --fail --location --silent --show-error --retry 2 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --tls-max 1.2 --http1.1 --ipv4 "$_lt_url" --output "$_lt_part"; then _lt_rc=0; else _lt_rc=$?; fi
             else
               continue
             fi ;;

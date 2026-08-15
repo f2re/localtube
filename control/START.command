@@ -6,7 +6,7 @@ PORT=$(/bin/cat "$BASE/data/port" 2>/dev/null | /usr/bin/tr -cd '0-9'); [ -n "$P
 I=0
 while [ "$I" -lt 15 ]; do
   TOKEN=$(/bin/cat "$BASE/data/api_token" 2>/dev/null | /usr/bin/tr -d '\r\n')
-  if [ -n "$TOKEN" ] && /usr/bin/curl -fsS --max-time 2 -H "X-LocalTube-Token: $TOKEN" "http://127.0.0.1:$PORT/api/health" 2>/dev/null | /usr/bin/grep -q '"ok":true'; then
+  if [ -n "$TOKEN" ] && /usr/bin/curl -q --noproxy '*' --http1.1 -fsS --max-time 2 -H "X-LocalTube-Token: $TOKEN" "http://127.0.0.1:$PORT/api/health" 2>/dev/null | /usr/bin/grep -q '"ok":true'; then
     /usr/bin/open "http://127.0.0.1:$PORT/"; printf 'LocalTube запущен: http://127.0.0.1:%s/\n' "$PORT"; exit 0
   fi
   /bin/sleep 1; I=$((I + 1))

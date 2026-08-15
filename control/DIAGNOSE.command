@@ -29,14 +29,14 @@ REPORT="$HOME/Desktop/LocalTube-diagnostic-$(/bin/date '+%Y%m%d-%H%M%S').txt"
 
   printf '\n%s\n' '--- authenticated local health ---'
   if [ -n "$TOKEN" ]; then
-    /usr/bin/curl -sS --max-time 5 -H "X-LocalTube-Token: $TOKEN" "http://127.0.0.1:$PORT/api/health" 2>&1 || true
+    /usr/bin/curl -q --noproxy '*' --http1.1 -sS --max-time 5 -H "X-LocalTube-Token: $TOKEN" "http://127.0.0.1:$PORT/api/health" 2>&1 || true
   else
     printf '%s\n' 'API token missing'
   fi
 
   printf '\n\n%s\n' '--- YouTube/EJS extraction check (no media is downloaded) ---'
   if [ -n "$TOKEN" ]; then
-    /usr/bin/curl -sS --max-time 75 -H 'Content-Type: application/json' -H "X-LocalTube-Token: $TOKEN" \
+    /usr/bin/curl -q --noproxy '*' --http1.1 -sS --max-time 75 -H 'Content-Type: application/json' -H "X-LocalTube-Token: $TOKEN" \
       -X POST --data '{}' "http://127.0.0.1:$PORT/api/diagnostics" 2>&1 || true
   else
     printf '%s\n' 'Skipped: API token missing'

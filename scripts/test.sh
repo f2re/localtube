@@ -16,6 +16,8 @@ python3 scripts/check_shell_compat.py
 
 echo '[health] startup readiness race regression'
 python3 scripts/check_health_startup.py
+echo '[loopback] curlrc/proxy isolation regression'
+python3 scripts/check_loopback_transport.py
 
 echo '[4/11] Unix runtime destination guard'
 _tmp_runtime_test="$(mktemp -d)"

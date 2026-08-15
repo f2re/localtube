@@ -1,5 +1,13 @@
 # 🗒️ Changelog
 
+## 1.4.3 — 2026-08-15
+
+- локальные health/API-запросы больше не зависят от `~/.curlrc`: `curl -q` отключает пользовательский config, а `--noproxy '*'` гарантирует прямой loopback;
+- macOS installer имеет независимый raw-HTTP fallback через `/usr/bin/nc`, поэтому сбой/настройка curl больше не вызывает ложный rollback рабочего LaunchAgent;
+- при ошибке health печатаются transport, curl exit/body и raw HTTP ответ, а `--fail` больше не скрывает 403/500 во время диагностики;
+- то же правило применено к macOS launcher/controls, shared service helpers и Linux control CLI;
+- macOS CI теперь намеренно создаёт враждебный `~/.curlrc` с proxy и подменой Host и проверяет, что LocalTube продолжает работать.
+
 ## 1.4.2 — 2026-08-15
 
 - исправлена гонка macOS LaunchAgent startup: installer больше не принимает `ok:true` за готовность и ждёт именно `runtime.ready:true`;
