@@ -110,3 +110,16 @@ jobs:
             dist/LocalTube-macOS-v*.zip
             dist/LocalTube-macOS-v*.zip.sha256
           if-no-files-found: error
+
+  macos-intel-integration:
+    name: macOS Intel runtime + resilient bootstrap
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: TLS/cache regression on Intel
+        shell: bash
+        run: ./scripts/test_bootstrap_resilience.sh
+      - name: Real Intel macOS runtime integration
+        shell: bash
+        run: ./scripts/ci_macos_integration.sh
