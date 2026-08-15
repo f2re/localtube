@@ -27,7 +27,7 @@ cp -a "$PAYLOAD/." "$STAGE/app/"
 
 echo 'LocalTube — Linux installer'
 echo '[1/5] installing runtime'
-lt_install_runtime "$STAGE/runtime"
+LOCALTUBE_BOOTSTRAP_CACHE="$CACHE/bootstrap" LOCALTUBE_EXISTING_RUNTIME="$RUNTIME" lt_install_runtime "$STAGE/runtime"
 
 echo '[2/5] validating backend'
 HOME="$HOME" LOCALTUBE_BASE="$STAGE" LOCALTUBE_APP_DIR="$STAGE/app" LOCALTUBE_RUNTIME_DIR="$STAGE/runtime" \
