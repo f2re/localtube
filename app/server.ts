@@ -1,4 +1,4 @@
-// LocalTube 1.4.1 — dependency-free cross-platform Deno backend.
+// LocalTube 1.4.2 — dependency-free cross-platform Deno backend.
 // No npm/jsr imports: the service remains usable offline after installation.
 
 declare const Deno: any;
@@ -321,7 +321,8 @@ async function transactionalUpdateYtdlp(): Promise<{ before: string | null; afte
 
 let runtimeStatusCache: { at: number; value: Json } | null = null;
 async function runtimeStatus(force = false): Promise<Json> {
-  if (!force && runtimeStatusCache && Date.now() - runtimeStatusCache.at < 30_000) return runtimeStatusCache.value;
+  const cacheTtl = runtimeStatusCache?.value.ready === true ? 30_000 : 1_000;
+  if (!force && runtimeStatusCache && Date.now() - runtimeStatusCache.at < cacheTtl) return runtimeStatusCache.value;
   const [yt, ff, fp, appVersion] = await Promise.all([
     versionOf(YTDLP), versionOf(FFMPEG, ['-version']), versionOf(FFPROBE, ['-version']),
     readText(`${APP_DIR}/VERSION`, 'dev'),
@@ -788,7 +789,7 @@ function contentType(path: string): string {
 }
 
 async function deepDiagnostic(settings: Settings): Promise<Json> {
-  const local = await runtimeStatus();
+  const local = await runtimeStatus(true);
   const result: Json = { local, youtube: { ok: false, detail: '' } };
   if (!(local.ready as boolean)) return result;
   try {
@@ -842,7 +843,7 @@ async function main(): Promise<void> {
       }
       if (!url.pathname.startsWith('/api/') || !apiAllowed(req, token)) return errorResponse('Forbidden', 403);
 
-      if (req.method === 'GET' && url.pathname === '/api/health') return jsonResponse({ ok: true, runtime: await runtimeStatus() });
+      if (req.method === 'GET' && url.pathname === '/api/health') return jsonResponse({ ok: true, runtime: await runtimeStatus(url.searchParams.get('refresh') === '1') });
       if (req.method === 'GET' && url.pathname === '/api/settings') {
         const s = await loadSettings(); return jsonResponse({ ok: true, settings: s, disk: await diskInfo(s.download_dir) });
       }
