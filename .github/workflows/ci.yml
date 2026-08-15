@@ -112,9 +112,9 @@ jobs:
           if-no-files-found: error
 
   macos-intel-integration:
-    name: macOS Intel full package + resilient bootstrap
+    name: macOS Intel installer + resilient loopback
     runs-on: macos-15-intel
-    timeout-minutes: 25
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -123,13 +123,19 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm install --global typescript@5.8.3
-      - name: Full source/package audit on Intel
+      - name: Intel-specific installer guards and package build
         shell: bash
-        run: ./scripts/test.sh
-      - name: Real Intel macOS runtime integration
+        run: |
+          set -euo pipefail
+          /bin/bash -n installer/install.sh installer/install-linux.sh app/scripts/*.sh scripts/ci_macos_integration.sh scripts/test_bootstrap_resilience.sh
+          for f in INSTALL.command control/*.command control/linux/localtube; do /bin/sh -n "$f"; done
+          python3 scripts/check_shell_compat.py
+          python3 scripts/check_health_startup.py
+          python3 scripts/check_loopback_transport.py
+          ./scripts/test_bootstrap_resilience.sh
+          python3 scripts/build_release.py >/tmp/localtube-intel-build.txt
+          python3 scripts/verify_release.py
+          ./INSTALL.command --layout-self-test | grep -q 'source-checkout layout self-test: OK'
+      - name: Real Intel macOS runtime integration with hostile curl config
         shell: bash
         run: ./scripts/ci_macos_integration.sh
