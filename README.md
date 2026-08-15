@@ -40,7 +40,7 @@ LocalTube превращает `yt-dlp + FFmpeg + Deno` в обычное лок
 
 | ОС | Архитектуры | Установка | Автозапуск |
 |---|---|---|---|
-| **macOS 11+** | Apple Silicon, Intel x86_64 | `Install LocalTube.app` | LaunchAgent |
+| **macOS 11+** | Apple Silicon, Intel x86_64 | `Install LocalTube.app` или `./INSTALL.command` из source checkout | LaunchAgent |
 | **Linux** | x86_64, arm64/aarch64 | `./INSTALL.sh` без `sudo` | `systemd --user`, если доступен |
 | **Windows 10/11** | x64, ARM64 | `INSTALL.ps1` без администратора | запуск из меню «Пуск» |
 
@@ -54,18 +54,45 @@ LocalTube превращает `yt-dlp + FFmpeg + Deno` в обычное лок
 - `LocalTube-Linux-vX.Y.Z.tar.gz`
 - `LocalTube-Windows-vX.Y.Z.zip`
 
-Рядом с каждым архивом публикуется файл `.sha256`. Внутри пакета также есть `MANIFEST.sha256` для проверки содержимого.
+Рядом с каждым архивом публикуется файл `.sha256`. Внутри release-пакета также есть `MANIFEST.sha256` для проверки содержимого.
 
-### 🍎 macOS
+### 🍎 macOS — готовый Release
 
 1. Скачайте `LocalTube-macOS-...zip` и распакуйте.
 2. Запустите **`Install LocalTube.app`**.
 3. Установщик скачает Deno, `yt-dlp`, FFmpeg и FFprobe для вашего CPU, проверит SHA-256 и выполнит self-test.
 4. Запускайте `~/Applications/LocalTube.app`.
 
-Основной `.app`-установщик не зависит от `.zshrc`, Oh-My-Zsh, Homebrew shellenv или pyenv. Резервный `INSTALL.command` оставлен для ручной диагностики.
+Основной `.app`-установщик не зависит от `.zshrc`, Oh-My-Zsh, Homebrew shellenv или pyenv. Резервный `INSTALL.command` в release-пакете использует тот же production installer.
 
 Если Gatekeeper предупреждает о неизвестном разработчике, откройте приложение через Finder → правый клик → **Открыть**. Полностью бесшовный Gatekeeper требует Developer ID и нотарификации Apple.
+
+### 🍎 macOS — установка прямо из `git clone`
+
+Source checkout и готовый Release имеют **разную структуру**. В репозитории исходники находятся в `app/`, `control/`, `installer/`, а генерируемые `payload/` и `app-template/` появляются только при сборке релиза. Поэтому **не запускайте `installer/install.sh` напрямую из клона**.
+
+Из корня репозитория используйте:
+
+```bash
+git pull
+./INSTALL.command
+```
+
+`INSTALL.command` автоматически определяет, что запущен из source checkout, собирает во временном каталоге совместимый production-layout, создаёт локальный `.app` launcher системными средствами macOS и передаёт его тому же `installer/install.sh`, который используется в GitHub Release. Для этого **не требуются Go, Python, Homebrew или zsh**. Временный каталог удаляется после завершения установки.
+
+Для проверки только структуры, без установки runtime и без изменения системы:
+
+```bash
+./INSTALL.command --layout-self-test
+```
+
+Ожидаемый результат:
+
+```text
+LocalTube source-checkout layout self-test: OK
+```
+
+Source install намеренно доверяет содержимому текущего Git checkout; `MANIFEST.sha256` относится к собранным release-архивам. Скачиваемые Deno/yt-dlp/FFmpeg при этом проверяются теми же upstream SHA-256, что и при обычной release-установке.
 
 ### 🐧 Linux
 
@@ -181,7 +208,8 @@ Backend, runtime, данные, логи и кэш разделены внутр
 - проверку ограничений безопасности;
 - сборку macOS universal launcher;
 - сборку **трёх** bootstrap-пакетов;
-- проверку структуры архивов и SHA-256.
+- проверку структуры архивов и SHA-256;
+- на macOS — отдельный regression-test source-checkout → temporary production-layout.
 
 GitHub Actions дополнительно запускает integration tests на:
 

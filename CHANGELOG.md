@@ -1,5 +1,12 @@
 # 🗒️ Changelog
 
+## Unreleased
+
+- исправлен запуск `./INSTALL.command` непосредственно из macOS `git clone`: source tree больше не ошибочно трактуется как готовый release-пакет с `payload/`;
+- source entrypoint временно синтезирует production-layout и dependency-free `LocalTube.app`, затем использует тот же транзакционный `installer/install.sh`, что и Release;
+- добавлен `./INSTALL.command --layout-self-test` и macOS regression-test source-checkout layout;
+- source bootstrap не требует Go, Python, Homebrew или пользовательского zsh-профиля.
+
 ## 1.4.0 — 2026-08-15
 
 - LocalTube переведён с macOS-only на единый backend для macOS, Linux и Windows;
