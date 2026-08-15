@@ -30,6 +30,18 @@ run_clean_installer() {
     /bin/bash --noprofile --norc "$_root/installer/install.sh" "$MODE"
 }
 
+# CI/support self-test must stay runnable even on a non-macOS runner. install.sh exits
+# before any platform side effects in this mode and proves that no user rc files are read.
+if [ "$MODE" = '--self-test' ] && [ -f "$SELF_DIR/installer/install.sh" ]; then
+  trap - 0 1 2 15
+  exec /usr/bin/env -i \
+    HOME="$HOME" \
+    USER="${USER:-}" \
+    LOGNAME="${LOGNAME:-${USER:-}}" \
+    PATH='/usr/bin:/bin:/usr/sbin:/sbin' \
+    /bin/bash --noprofile --norc "$SELF_DIR/installer/install.sh" --self-test
+fi
+
 # Normal Release layout. Keep this fast path completely unchanged in semantics.
 if [ -f "$SELF_DIR/payload/app/server.ts" ] && \
    [ -f "$SELF_DIR/app-template/LocalTube.app/Contents/Info.plist" ] && \
