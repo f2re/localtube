@@ -110,3 +110,26 @@ jobs:
             dist/LocalTube-macOS-v*.zip
             dist/LocalTube-macOS-v*.zip.sha256
           if-no-files-found: error
+
+  macos-intel-integration:
+    name: macOS Intel full package + resilient bootstrap
+    runs-on: macos-15-intel
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --global typescript@5.8.3
+      - name: Full source/package audit on Intel
+        shell: bash
+        run: ./scripts/test.sh
+      - name: Real Intel macOS runtime integration
+        shell: bash
+        run: ./scripts/ci_macos_integration.sh

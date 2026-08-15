@@ -1,4 +1,4 @@
-// LocalTube 1.4.0 — dependency-free cross-platform Deno backend.
+// LocalTube 1.4.1 — dependency-free cross-platform Deno backend.
 // No npm/jsr imports: the service remains usable offline after installation.
 
 declare const Deno: any;
