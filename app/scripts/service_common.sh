@@ -29,7 +29,7 @@ lt_health() {
   _lt_port="$(lt_port)"
   _lt_token="$(lt_token 2>/dev/null)" || return 1
   [ -n "$_lt_token" ] || return 1
-  /usr/bin/curl --fail --silent --show-error --max-time 3 \
+  /usr/bin/curl -q --noproxy '*' --http1.1 --fail --silent --show-error --max-time 3 \
     -H "X-LocalTube-Token: $_lt_token" \
     "http://127.0.0.1:$_lt_port/api/health" 2>/dev/null | /usr/bin/grep -q '"ok":true'
 }
@@ -47,7 +47,7 @@ lt_wait_health() {
 lt_has_active_jobs() {
   _lt_port="$(lt_port)"
   _lt_token="$(lt_token 2>/dev/null)" || return 1
-  _lt_jobs="$(/usr/bin/curl --fail --silent --max-time 4 -H "X-LocalTube-Token: $_lt_token" "http://127.0.0.1:$_lt_port/api/jobs" 2>/dev/null)" || return 1
+  _lt_jobs="$(/usr/bin/curl -q --noproxy '*' --http1.1 --fail --silent --max-time 4 -H "X-LocalTube-Token: $_lt_token" "http://127.0.0.1:$_lt_port/api/jobs" 2>/dev/null)" || return 1
   printf '%s' "$_lt_jobs" | /usr/bin/grep -Eq '"state":"(queued|running)"'
 }
 

@@ -9,6 +9,11 @@ APP="$BASE/app"; RUNTIME="$BASE/runtime"; DATA="$BASE/data"; LOGS="$BASE/logs"; 
 PID=''
 cleanup() {
   if [ -n "$PID" ]; then /bin/kill "$PID" >/dev/null 2>&1 || true; fi
+  if [ "${CURLRC_HAD_ORIGINAL:-0}" -eq 1 ] && [ -f "${CURLRC_BACKUP:-}" ]; then
+    /bin/cp "$CURLRC_BACKUP" "$HOME/.curlrc"
+  else
+    /bin/rm -f "$HOME/.curlrc"
+  fi
   /bin/rm -rf "$WORK" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT HUP INT TERM
@@ -40,6 +45,19 @@ echo '[macOS 3/7] Deno check + backend self-test'
 HOME="$HOME" LOCALTUBE_BASE="$BASE" LOCALTUBE_APP_DIR="$APP" LOCALTUBE_RUNTIME_DIR="$RUNTIME" \
   "$RUNTIME/deno" run --no-config -A "$APP/server.ts" --self-test
 
+echo '[macOS curl] hostile ~/.curlrc isolation test'
+CURLRC_BACKUP="$WORK/original.curlrc"
+CURLRC_HAD_ORIGINAL=0
+if [ -f "$HOME/.curlrc" ]; then
+  /bin/cp "$HOME/.curlrc" "$CURLRC_BACKUP"
+  CURLRC_HAD_ORIGINAL=1
+fi
+/bin/cat > "$HOME/.curlrc" <<'CURLRC'
+proxy = "http://127.0.0.1:9"
+header = "Host: hostile.invalid"
+connect-timeout = 1
+CURLRC
+
 echo '[macOS 4/7] start production-permission server'
 PORT=18765
 printf '%s\n' "$PORT" > "$DATA/port"
@@ -48,15 +66,15 @@ TOKEN=''
 I=0
 while [ "$I" -lt 40 ]; do
   [ -f "$DATA/api_token" ] && TOKEN="$(/usr/bin/tr -d '\r\n' < "$DATA/api_token")"
-  if [ -n "$TOKEN" ] && /usr/bin/curl -fsS --max-time 3 -H "X-LocalTube-Token: $TOKEN" "http://127.0.0.1:$PORT/api/health" | /usr/bin/grep -q '"ready":true'; then break; fi
+  if [ -n "$TOKEN" ] && /usr/bin/curl -q --noproxy '*' --http1.1 -fsS --max-time 3 -H "X-LocalTube-Token: $TOKEN" "http://127.0.0.1:$PORT/api/health" | /usr/bin/grep -q '"ready":true'; then break; fi
   /bin/sleep 1
   I=$((I + 1))
 done
 [ -n "$TOKEN" ] || { /bin/cat "$LOGS/ci.stderr"; exit 20; }
-/usr/bin/curl -fsS --max-time 3 -H "X-LocalTube-Token: $TOKEN" "http://127.0.0.1:$PORT/api/health" | /usr/bin/grep -q '"ready":true'
+/usr/bin/curl -q --noproxy '*' --http1.1 -fsS --max-time 3 -H "X-LocalTube-Token: $TOKEN" "http://127.0.0.1:$PORT/api/health" | /usr/bin/grep -q '"ready":true'
 
 echo '[macOS 5/7] live YouTube extraction diagnostic'
-DIAG_JSON="$(/usr/bin/curl -fsS --max-time 45 -H 'Content-Type: application/json' -H "X-LocalTube-Token: $TOKEN" -X POST --data '{}' "http://127.0.0.1:$PORT/api/diagnostics")"
+DIAG_JSON="$(/usr/bin/curl -q --noproxy '*' --http1.1 -fsS --max-time 45 -H 'Content-Type: application/json' -H "X-LocalTube-Token: $TOKEN" -X POST --data '{}' "http://127.0.0.1:$PORT/api/diagnostics")"
 printf '%s\n' "$DIAG_JSON"
 YT_RESULT="$(printf '%s' "$DIAG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin)["diagnostics"]["youtube"]; print("ok" if d.get("ok") else "fail"); print(d.get("detail", ""))')"
 YT_STATE="$(printf '%s\n' "$YT_RESULT" | /usr/bin/head -n 1)"
@@ -98,11 +116,11 @@ import json,sys
 print(json.dumps({"url":"https://www.youtube.com/watch?v=YE7VzlLtp-4&t=1s&end=9","mode":"video","height":360,"download_dir":sys.argv[1],"video_container":"mp4","cookies_mode":"none","embed_metadata":False,"playlist":False}))
 PY
 )"
-/usr/bin/curl -fsS --max-time 10 -H 'Content-Type: application/json' -H "X-LocalTube-Token: $TOKEN" -X POST --data "$PAYLOAD" "http://127.0.0.1:$PORT/api/jobs" >/dev/null
+/usr/bin/curl -q --noproxy '*' --http1.1 -fsS --max-time 10 -H 'Content-Type: application/json' -H "X-LocalTube-Token: $TOKEN" -X POST --data "$PAYLOAD" "http://127.0.0.1:$PORT/api/jobs" >/dev/null
 STATE=''
 I=0
 while [ "$I" -lt 180 ]; do
-  JOBS="$(/usr/bin/curl -fsS --max-time 4 -H "X-LocalTube-Token: $TOKEN" "http://127.0.0.1:$PORT/api/jobs")"
+  JOBS="$(/usr/bin/curl -q --noproxy '*' --http1.1 -fsS --max-time 4 -H "X-LocalTube-Token: $TOKEN" "http://127.0.0.1:$PORT/api/jobs")"
   STATE="$(printf '%s' "$JOBS" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("jobs") or [{}])[0].get("state",""))')"
   case "$STATE" in completed) break ;; failed|cancelled|interrupted) printf '%s\n' "$JOBS"; /bin/cat "$LOGS/ci.stderr"; exit 22 ;; esac
   /bin/sleep 1

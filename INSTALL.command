@@ -140,7 +140,7 @@ health() {
   [ -f "$DATA/api_token" ] || return 1
   _token=$(/usr/bin/tr -d '\r\n' < "$DATA/api_token" 2>/dev/null)
   [ -n "$_token" ] || return 1
-  /usr/bin/curl --fail --silent --max-time 3 \
+  /usr/bin/curl -q --noproxy '*' --http1.1 --fail --silent --max-time 3 \
     -H "X-LocalTube-Token: $_token" \
     "http://127.0.0.1:$PORT/api/health" 2>/dev/null | /usr/bin/grep -q '"ready":true'
 }

@@ -1,5 +1,5 @@
 #!/bin/bash
-# LocalTube 1.4.2 macOS installer.
+# LocalTube 1.4.3 macOS installer.
 # Runs with a deterministic environment and does not source zsh/bash profiles.
 # Compatible with Apple's /bin/bash 3.2.
 set -u
@@ -169,16 +169,60 @@ PLIST
 }
 
 LAST_HEALTH_JSON=''
-health() {
+LAST_HEALTH_RAW=''
+LAST_HEALTH_ERROR=''
+LAST_HEALTH_TRANSPORT=''
+
+health_via_curl() {
   _port="$(/bin/cat "$DATA/port" 2>/dev/null | /usr/bin/tr -cd '0-9')"
   _token="$(/bin/cat "$DATA/api_token" 2>/dev/null | /usr/bin/tr -d '\r\n')"
   valid_port "$_port" || return 1
   [ -n "$_token" ] || return 1
-  _health_json="$(/usr/bin/curl --fail --silent --show-error --max-time 12 \
-    -H "X-LocalTube-Token: $_token" "http://127.0.0.1:$_port/api/health?refresh=1" 2>/dev/null)" || return 1
-  [ -n "$_health_json" ] && LAST_HEALTH_JSON="$_health_json"
+  _health_json="$(/usr/bin/curl -q --noproxy '*' --http1.1 --silent --show-error \
+    --connect-timeout 2 --max-time 12 \
+    -H "X-LocalTube-Token: $_token" "http://127.0.0.1:$_port/api/health?refresh=1" 2>&1)"
+  _curl_rc=$?
+  if [ -n "$_health_json" ]; then LAST_HEALTH_JSON="$_health_json"; fi
+  if [ "$_curl_rc" -ne 0 ]; then
+    LAST_HEALTH_ERROR="sterile curl exit $_curl_rc: $_health_json"
+    return 1
+  fi
   printf '%s' "$_health_json" | /usr/bin/grep -q '"ok":true' || return 1
-  printf '%s' "$_health_json" | /usr/bin/grep -q '"ready":true'
+  if printf '%s' "$_health_json" | /usr/bin/grep -q '"ready":true'; then
+    LAST_HEALTH_TRANSPORT='curl-direct-loopback'
+    return 0
+  fi
+  return 1
+}
+
+health_via_nc() {
+  _port="$(/bin/cat "$DATA/port" 2>/dev/null | /usr/bin/tr -cd '0-9')"
+  _token="$(/bin/cat "$DATA/api_token" 2>/dev/null | /usr/bin/tr -d '\r\n')"
+  valid_port "$_port" || return 1
+  [ -n "$_token" ] || return 1
+  [ -x /usr/bin/nc ] || return 1
+  _health_raw="$(
+    /usr/bin/printf 'GET /api/health?refresh=1 HTTP/1.1\r\nHost: 127.0.0.1:%s\r\nX-LocalTube-Token: %s\r\nConnection: close\r\n\r\n' "$_port" "$_token" | \
+      /usr/bin/nc -w 15 127.0.0.1 "$_port" 2>&1
+  )"
+  _nc_rc=$?
+  if [ -n "$_health_raw" ]; then LAST_HEALTH_RAW="$_health_raw"; fi
+  if [ "$_nc_rc" -ne 0 ]; then
+    LAST_HEALTH_ERROR="nc loopback exit $_nc_rc"
+    return 1
+  fi
+  printf '%s' "$_health_raw" | /usr/bin/grep -Eq 'HTTP/1\.[01] 200' || return 1
+  if printf '%s' "$_health_raw" | /usr/bin/grep -q '"ready":true'; then
+    LAST_HEALTH_TRANSPORT='raw-http-loopback'
+    return 0
+  fi
+  return 1
+}
+
+health() {
+  health_via_curl && return 0
+  health_via_nc && return 0
+  return 1
 }
 
 wait_health() {
@@ -193,7 +237,14 @@ wait_health() {
 
 print_health_diagnostics() {
   say '--- runtime health ---'
-  if [ -n "$LAST_HEALTH_JSON" ]; then printf '%s\n' "$LAST_HEALTH_JSON"; else say '(health endpoint не вернул JSON)'; fi
+  say "transport: ${LAST_HEALTH_TRANSPORT:-none}"
+  if [ -n "$LAST_HEALTH_ERROR" ]; then say "last transport error: $LAST_HEALTH_ERROR"; fi
+  if [ -n "$LAST_HEALTH_JSON" ]; then printf '%s\n' "$LAST_HEALTH_JSON"; else say '(sterile curl не вернул JSON)'; fi
+  if [ -n "$LAST_HEALTH_RAW" ]; then
+    say '--- raw loopback HTTP (tail) ---'
+    printf '%s\n' "$LAST_HEALTH_RAW" | /usr/bin/tail -n 20
+  fi
+  if [ -f "$HOME/.curlrc" ]; then say '~/.curlrc: present (LocalTube loopback checks ignore it with curl -q)'; fi
   say '--- launchd state ---'
   /bin/launchctl print "$DOMAIN/$LABEL" 2>&1 | /usr/bin/tail -n 80 || true
   say '--- direct runtime checks ---'
@@ -287,7 +338,7 @@ on_signal() {
 trap cleanup EXIT
 trap on_signal HUP INT TERM
 
-say 'LocalTube 1.4.2 — production installer'
+say 'LocalTube 1.4.3 — production installer'
 say '======================================'
 is_macos || fail 'Этот пакет предназначен только для macOS.'
 
@@ -435,10 +486,10 @@ if ! wait_health; then
 fi
 TOKEN="$(/bin/cat "$DATA/api_token" 2>/dev/null | /usr/bin/tr -d '\r\n')"
 HEALTH_JSON="$LAST_HEALTH_JSON"
-say '      runtime: ready'
+say "      runtime: ready via ${LAST_HEALTH_TRANSPORT:-loopback}"
 
 say '[8/8] Проверяю интеграцию yt-dlp + Deno с YouTube (без скачивания видео)…'
-DIAG_JSON="$(/usr/bin/curl --fail --silent --max-time 75 -H 'Content-Type: application/json' -H "X-LocalTube-Token: $TOKEN" -X POST --data '{}' "http://127.0.0.1:$PORT/api/diagnostics" 2>/dev/null || true)"
+DIAG_JSON="$(/usr/bin/curl -q --noproxy '*' --http1.1 --fail --silent --max-time 75 -H 'Content-Type: application/json' -H "X-LocalTube-Token: $TOKEN" -X POST --data '{}' "http://127.0.0.1:$PORT/api/diagnostics" 2>/dev/null || true)"
 if printf '%s' "$DIAG_JSON" | /usr/bin/grep -q '"ok":true'; then
   # The response contains two ok fields; require YouTube detail as well to avoid treating the envelope only as success.
   if printf '%s' "$DIAG_JSON" | /usr/bin/grep -q 'YouTube extraction OK'; then say '      YouTube extraction: OK'; else warn 'Сервис работает, но онлайн-проверка YouTube не подтвердилась. Причина сохранится в DIAGNOSE.command.'; fi

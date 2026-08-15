@@ -8,7 +8,7 @@ PORT="$(tr -cd '0-9' < "$DATA/port" 2>/dev/null || printf 8765)"
 health() {
   [ -f "$DATA/api_token" ] || return 1
   token="$(tr -d '\r\n' < "$DATA/api_token")"
-  curl -fsS --max-time 3 -H "X-LocalTube-Token: $token" "http://127.0.0.1:$PORT/api/health" 2>/dev/null | grep -q '"ok":true'
+  curl -q --noproxy '*' --http1.1 -fsS --max-time 3 -H "X-LocalTube-Token: $token" "http://127.0.0.1:$PORT/api/health" 2>/dev/null | grep -q '"ok":true'
 }
 start_service() {
   if health; then :; elif command -v systemctl >/dev/null 2>&1 && systemctl --user start localtube.service >/dev/null 2>&1; then :; else
@@ -31,7 +31,7 @@ case "${1:-start}" in
   diagnose)
     health || { echo 'LocalTube is not running' >&2; exit 1; }
     token="$(tr -d '\r\n' < "$DATA/api_token")"
-    curl -fsS -H 'Content-Type: application/json' -H "X-LocalTube-Token: $token" -X POST --data '{}' "http://127.0.0.1:$PORT/api/diagnostics"
+    curl -q --noproxy '*' --http1.1 -fsS -H 'Content-Type: application/json' -H "X-LocalTube-Token: $token" -X POST --data '{}' "http://127.0.0.1:$PORT/api/diagnostics"
     ;;
   *) echo 'Usage: localtube {start|stop|status|diagnose}' >&2; exit 2 ;;
 esac
