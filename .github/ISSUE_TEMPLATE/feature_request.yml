@@ -1,0 +1,17 @@
+name: "💡 Идея"
+description: "Предложить улучшение LocalTube"
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Какая задача сейчас неудобна?"
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "Предлагаемое решение"
+    validations:
+      required: true

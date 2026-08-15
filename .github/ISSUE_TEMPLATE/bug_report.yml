@@ -1,0 +1,34 @@
+name: "🐛 Ошибка"
+description: "Сообщить о воспроизводимой проблеме LocalTube"
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Не прикладывайте cookies, API token и другие секреты."
+  - type: input
+    id: version
+    attributes:
+      label: "Версия LocalTube"
+      placeholder: "1.3.0"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: "macOS и CPU"
+      placeholder: "macOS 15.x, arm64"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Как воспроизвести"
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: "Что произошло / что ожидалось"
+    validations:
+      required: true

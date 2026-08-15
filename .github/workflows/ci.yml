@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Static / cross-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: TypeScript compiler
+        run: npm install --global typescript@5.8.3
+      - name: Full local audit
+        run: ./scripts/test.sh
+
+  macos-integration:
+    name: macOS runtime + YouTube E2E
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --global typescript@5.8.3
+      - name: Shell / source audit
+        shell: bash
+        run: ./scripts/test.sh
+      - name: Real macOS integration
+        shell: bash
+        run: ./scripts/ci_macos_integration.sh
+      - name: Upload macOS bootstrap package
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalTube-macOS-bootstrap
+          path: |
+            dist/LocalTube-macOS-v*.zip
+            dist/LocalTube-macOS-v*.zip.sha256
+          if-no-files-found: error
