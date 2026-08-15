@@ -35,7 +35,10 @@ lt_download 'https://example.invalid/file' "$TMP/download" 'test resilient curl 
 grep -q transport-ok "$TMP/download"
 PATH="$OLD_PATH"
 
-# Fake runtime tools used for cache and existing-runtime tests.
+# Keep the test platform deterministic on Linux, Apple Silicon and Intel CI.
+lt_os() { printf '%s\n' darwin; }
+lt_arch() { printf '%s\n' amd64; }
+
 make_tool() {
   name="$1"; path="$2"
   case "$name" in
@@ -57,8 +60,6 @@ done
 # 2) Total network failure must still produce a complete runtime from verified cache.
 lt_download() { return 1; }
 lt_download_effective() { return 1; }
-lt_os() { printf '%s\n' darwin; }
-lt_arch() { printf '%s\n' amd64; }
 lt_install_runtime "$TMP/runtime-from-cache"
 for t in deno yt-dlp ffmpeg ffprobe; do test -x "$TMP/runtime-from-cache/$t"; done
 grep -q 'cache:' "$TMP/runtime-from-cache/manifest.json"
