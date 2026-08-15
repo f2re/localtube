@@ -1,5 +1,14 @@
 # 🗒️ Changelog
 
+## 1.4.1 — 2026-08-15
+
+- bootstrap macOS/Linux больше не зависит от единственной TLS-сессии к GitHub CDN: curl пробует обычный режим, HTTP/1.1, IPv4 и TLS 1.2, затем доступные альтернативные транспорты;
+- успешно проверенные Deno, yt-dlp, FFmpeg и FFprobe сразу сохраняются в persistent SHA-256 cache и переиспользуются после частично неудачной установки;
+- при сетевой ошибке installer умеет переиспользовать рабочий runtime уже установленной версии LocalTube, не останавливая сервис до завершения preflight;
+- для Deno добавлен официальный альтернативный маршрут через `dl.deno.land`;
+- добавлены regression-тесты, воспроизводящие `curl (35) LibreSSL SSL_ERROR_SYSCALL`, полный offline-cache fallback и reuse предыдущего runtime;
+- CI дополнен Intel macOS runner для проверки x86_64 runtime и bootstrap.
+
 ## Unreleased
 
 - исправлен запуск `./INSTALL.command` непосредственно из macOS `git clone`: source tree больше не ошибочно трактуется как готовый release-пакет с `payload/`;

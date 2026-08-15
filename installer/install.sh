@@ -1,5 +1,5 @@
 #!/bin/bash
-# LocalTube 1.4.0 macOS installer.
+# LocalTube 1.4.1 macOS installer.
 # Runs with a deterministic environment and does not source zsh/bash profiles.
 # Compatible with Apple's /bin/bash 3.2.
 set -u
@@ -267,7 +267,7 @@ on_signal() {
 trap cleanup EXIT
 trap on_signal HUP INT TERM
 
-say 'LocalTube 1.4.0 — production installer'
+say 'LocalTube 1.4.1 — production installer'
 say '======================================'
 is_macos || fail 'Этот пакет предназначен только для macOS.'
 
@@ -336,7 +336,7 @@ for F in "$STAGE/LocalTube Tools/"*.command; do /bin/sh -n "$F" || fail "Оши�
 say '[2/8] Скачиваю проверенное окружение: Deno, yt-dlp, FFmpeg/FFprobe…'
 gui_notify 'Скачиваю и проверяю Deno, yt-dlp и FFmpeg…'
 . "$STAGE/app/scripts/runtime_common.sh" || fail 'Не удалось загрузить модуль установки окружения.'
-lt_install_runtime "$STAGE/runtime" || fail 'Не удалось скачать или проверить автономное окружение. Старая версия LocalTube не была остановлена.'
+LOCALTUBE_BOOTSTRAP_CACHE="$CACHE/bootstrap" LOCALTUBE_EXISTING_RUNTIME="$RUNTIME" lt_install_runtime "$STAGE/runtime" || fail 'Не удалось получить рабочее окружение ни из сети, ни из проверенного кэша, ни из предыдущей установки. Старая версия LocalTube не была остановлена.'
 
 say '[3/8] Выполняю backend self-test на скачанном окружении…'
 HOME="$HOME" LOCALTUBE_BASE="$STAGE" LOCALTUBE_APP_DIR="$STAGE/app" LOCALTUBE_RUNTIME_DIR="$STAGE/runtime" \
