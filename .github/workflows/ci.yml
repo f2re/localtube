@@ -35,7 +35,7 @@ jobs:
         shell: bash
         run: ./scripts/test.sh
       - name: Upload bootstrap packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: LocalTube-bootstrap-packages
           path: |
@@ -103,7 +103,7 @@ jobs:
         shell: bash
         run: ./scripts/ci_macos_integration.sh
       - name: Upload macOS bootstrap package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: LocalTube-macOS-bootstrap
           path: |
