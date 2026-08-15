@@ -259,7 +259,7 @@ active_downloads() {
   _token="$(/bin/cat "$DATA/api_token" 2>/dev/null | /usr/bin/tr -d '\r\n')"
   valid_port "$_port" || return 1
   [ -n "$_token" ] || return 1
-  _jobs="$(/usr/bin/curl --fail --silent --max-time 4 -H "X-LocalTube-Token: $_token" "http://127.0.0.1:$_port/api/jobs" 2>/dev/null)" || return 1
+  _jobs="$(/usr/bin/curl -q --noproxy '*' --http1.1 --fail --silent --max-time 4 -H "X-LocalTube-Token: $_token" "http://127.0.0.1:$_port/api/jobs" 2>/dev/null)" || return 1
   printf '%s' "$_jobs" | /usr/bin/grep -Eq '"state":"(queued|running)"'
 }
 
