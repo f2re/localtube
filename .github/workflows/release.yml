@@ -11,7 +11,7 @@ permissions:
 jobs:
   release:
     runs-on: macos-14
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,13 +24,16 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --global typescript@5.8.3
-      - name: Audit and build
+
+      - name: Audit and build all platform packages
         shell: bash
         run: ./scripts/test.sh
+
       - name: Real macOS integration
         shell: bash
         run: ./scripts/ci_macos_integration.sh
-      - name: Build DMG and checksums
+
+      - name: Build macOS DMG and checksum
         shell: bash
         run: |
           set -euo pipefail
@@ -39,6 +42,22 @@ jobs:
           DMG="dist/LocalTube-macOS-v${VERSION}.dmg"
           hdiutil create -volname "LocalTube ${VERSION}" -srcfolder "$PKG" -ov -format UDZO "$DMG"
           shasum -a 256 "$DMG" > "$DMG.sha256"
+
+      - name: Upload release candidates
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalTube-release-candidates
+          path: |
+            dist/LocalTube-macOS-v*.zip
+            dist/LocalTube-macOS-v*.zip.sha256
+            dist/LocalTube-macOS-v*.dmg
+            dist/LocalTube-macOS-v*.dmg.sha256
+            dist/LocalTube-Linux-v*.tar.gz
+            dist/LocalTube-Linux-v*.tar.gz.sha256
+            dist/LocalTube-Windows-v*.zip
+            dist/LocalTube-Windows-v*.zip.sha256
+          if-no-files-found: error
+
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -52,4 +71,8 @@ jobs:
             "dist/LocalTube-macOS-v${VERSION}.zip.sha256" \
             "dist/LocalTube-macOS-v${VERSION}.dmg" \
             "dist/LocalTube-macOS-v${VERSION}.dmg.sha256" \
+            "dist/LocalTube-Linux-v${VERSION}.tar.gz" \
+            "dist/LocalTube-Linux-v${VERSION}.tar.gz.sha256" \
+            "dist/LocalTube-Windows-v${VERSION}.zip" \
+            "dist/LocalTube-Windows-v${VERSION}.zip.sha256" \
             --title "LocalTube ${VERSION}" --generate-notes

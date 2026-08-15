@@ -1,4 +1,4 @@
-// LocalTube 1.3.0 — dependency-free Deno backend for macOS.
+// LocalTube 1.4.0 — dependency-free cross-platform Deno backend.
 // No npm/jsr imports: the service remains usable offline after installation.
 
 declare const Deno: any;
@@ -40,8 +40,14 @@ type Job = {
   process?: any;
 };
 
-const HOME = Deno.env.get('HOME') || '';
-const BASE_DIR = Deno.env.get('LOCALTUBE_BASE') || `${HOME}/Library/Application Support/LocalTube`;
+const PLATFORM = Deno.build?.os || 'unknown';
+const HOME = Deno.env.get('HOME') || Deno.env.get('USERPROFILE') || '';
+const DEFAULT_BASE = PLATFORM === 'windows'
+  ? `${Deno.env.get('LOCALAPPDATA') || `${HOME}/AppData/Local`}/LocalTube`
+  : PLATFORM === 'linux'
+    ? `${Deno.env.get('XDG_DATA_HOME') || `${HOME}/.local/share`}/localtube`
+    : `${HOME}/Library/Application Support/LocalTube`;
+const BASE_DIR = Deno.env.get('LOCALTUBE_BASE') || DEFAULT_BASE;
 const APP_DIR = Deno.env.get('LOCALTUBE_APP_DIR') || `${BASE_DIR}/app`;
 const STATIC_DIR = `${APP_DIR}/static`;
 const RUNTIME_DIR = Deno.env.get('LOCALTUBE_RUNTIME_DIR') || `${BASE_DIR}/runtime`;
@@ -57,10 +63,11 @@ const MAX_BODY = 64 * 1024;
 const MAX_HISTORY = 100;
 const MAX_LOG_LINES = 180;
 const MAX_ACTIVE_JOBS = 50;
-const YTDLP = `${RUNTIME_DIR}/yt-dlp`;
-const FFMPEG = `${RUNTIME_DIR}/ffmpeg`;
-const FFPROBE = `${RUNTIME_DIR}/ffprobe`;
-const DENO_BIN = `${RUNTIME_DIR}/deno`;
+const EXE = PLATFORM === 'windows' ? '.exe' : '';
+const YTDLP = `${RUNTIME_DIR}/yt-dlp${EXE}`;
+const FFMPEG = `${RUNTIME_DIR}/ffmpeg${EXE}`;
+const FFPROBE = `${RUNTIME_DIR}/ffprobe${EXE}`;
+const DENO_BIN = `${RUNTIME_DIR}/deno${EXE}`;
 const TEST_VIDEO_ID = 'YE7VzlLtp-4';
 const TEST_VIDEO_URL = `https://www.youtube.com/watch?v=${TEST_VIDEO_ID}&t=1s&end=9`; // current yt-dlp upstream YouTube fixture
 
@@ -120,7 +127,9 @@ async function getToken(): Promise<string> {
   return token;
 }
 
-const DEFAULT_DOWNLOAD_DIR = `${HOME}/Movies/LocalTube`;
+const DEFAULT_DOWNLOAD_DIR = PLATFORM === 'darwin'
+  ? `${HOME}/Movies/LocalTube`
+  : `${HOME}/Downloads/LocalTube`;
 
 const DEFAULT_SETTINGS: Settings = {
   download_dir: DEFAULT_DOWNLOAD_DIR,
@@ -142,8 +151,17 @@ const VIDEO_CONTAINERS = new Set(['mp4', 'mkv', 'auto']);
 async function sanitizeSettings(raw: Partial<Settings>): Promise<Settings> {
   const s = { ...DEFAULT_SETTINGS, ...raw } as Settings;
   let folder = expandUser(safeString(s.download_dir, 4096));
-  if (!folder.startsWith('/') || folder.includes('\0')) folder = DEFAULT_SETTINGS.download_dir;
-  s.download_dir = folder.replace(/\/$/, '') || '/';
+  const absolute = PLATFORM === 'windows'
+    ? (/^[A-Za-z]:[\\/]/.test(folder) || /^\\\\[^\\]+\\[^\\]+/.test(folder))
+    : folder.startsWith('/');
+  if (!absolute || folder.includes('\0')) folder = DEFAULT_SETTINGS.download_dir;
+  if (PLATFORM === 'windows') {
+    folder = folder.replace(/\//g, '\\');
+    if (!/^[A-Za-z]:\\$/.test(folder)) folder = folder.replace(/\\+$/, '');
+    s.download_dir = folder;
+  } else {
+    s.download_dir = folder.replace(/\/$/, '') || '/';
+  }
   if (!['none', 'browser', 'file'].includes(s.cookies_mode)) s.cookies_mode = 'none';
   if (!COOKIE_BROWSERS.has(s.cookies_browser)) s.cookies_browser = 'chrome';
   if (!VIDEO_CONTAINERS.has(s.video_container)) s.video_container = 'mp4';
@@ -163,7 +181,7 @@ async function ensureWritableFolder(folder: string): Promise<void> {
     await Deno.writeTextFile(test, 'ok', { createNew: true, mode: 0o600 });
     await Deno.remove(test);
   } catch {
-    throw new Error(`Нет доступа на запись в папку: ${folder}. В macOS проверьте «Конфиденциальность и безопасность → Файлы и папки» или выберите другую папку.`);
+    throw new Error(`Нет доступа на запись в папку: ${folder}. Проверьте права доступа или выберите другую папку.`);
   }
 }
 
@@ -226,16 +244,27 @@ async function runCapture(cmd: string, args: string[], timeoutMs = 30_000): Prom
 async function terminateProcessTree(child: any): Promise<void> {
   if (!child) return;
   const pid = Number(child.pid);
-  if (Number.isInteger(pid) && pid > 1) {
+  if (PLATFORM === 'windows' && Number.isInteger(pid) && pid > 1) {
+    const root = Deno.env.get('SystemRoot') || 'C:/Windows';
     try {
-      const p = new Deno.Command('/usr/bin/pkill', { args: ['-TERM', '-P', String(pid)], stdin: 'null', stdout: 'null', stderr: 'null' }).spawn();
+      const p = new Deno.Command(`${root}/System32/taskkill.exe`, {
+        args: ['/PID', String(pid), '/T', '/F'], stdin: 'null', stdout: 'null', stderr: 'null',
+      }).spawn();
+      await Promise.race([p.status, delay(2500)]);
+    } catch { /* process may already be gone */ }
+    return;
+  }
+  const pkill = await existsFile('/usr/bin/pkill') ? '/usr/bin/pkill' : '/bin/pkill';
+  if (Number.isInteger(pid) && pid > 1 && await existsFile(pkill)) {
+    try {
+      const p = new Deno.Command(pkill, { args: ['-TERM', '-P', String(pid)], stdin: 'null', stdout: 'null', stderr: 'null' }).spawn();
       await Promise.race([p.status, delay(800)]);
-    } catch { /* pkill may be unavailable outside macOS */ }
+    } catch { /* ignore */ }
   }
   try { child.kill('SIGTERM'); } catch { /* already exited */ }
   await delay(700);
-  if (Number.isInteger(pid) && pid > 1) {
-    try { new Deno.Command('/usr/bin/pkill', { args: ['-KILL', '-P', String(pid)], stdin: 'null', stdout: 'null', stderr: 'null' }).spawn(); } catch { /* ignore */ }
+  if (Number.isInteger(pid) && pid > 1 && await existsFile(pkill)) {
+    try { new Deno.Command(pkill, { args: ['-KILL', '-P', String(pid)], stdin: 'null', stdout: 'null', stderr: 'null' }).spawn(); } catch { /* ignore */ }
   }
   try { child.kill('SIGKILL'); } catch { /* already exited */ }
 }
@@ -269,7 +298,7 @@ async function transactionalUpdateYtdlp(): Promise<{ before: string | null; afte
   let detail = '';
   try {
     await Deno.copyFile(YTDLP, backup);
-    try { await Deno.chmod(backup, 0o700); } catch { /* ignore */ }
+    if (PLATFORM !== 'windows') { try { await Deno.chmod(backup, 0o700); } catch { /* ignore */ } }
     const update = await runCapture(YTDLP, ['--ignore-config', '--update-to', 'nightly'], 180_000);
     detail = (update.stdout || update.stderr).trim().slice(0, 1200);
     if (update.code !== 0) throw new Error((update.stderr || update.stdout || 'Не удалось обновить yt-dlp').trim().split(/\r?\n/).at(-1)?.slice(0, 900));
@@ -281,7 +310,7 @@ async function transactionalUpdateYtdlp(): Promise<{ before: string | null; afte
   } catch (e) {
     try {
       await Deno.copyFile(backup, YTDLP);
-      await Deno.chmod(YTDLP, 0o755);
+      if (PLATFORM !== 'windows') await Deno.chmod(YTDLP, 0o755);
     } catch { /* diagnostics will report a damaged runtime if restoration also fails */ }
     runtimeStatusCache = null;
     throw e;
@@ -299,7 +328,7 @@ async function runtimeStatus(force = false): Promise<Json> {
   ]);
   const deno = Deno.version?.deno ? `deno ${safeString(Deno.version.deno, 80)}` : null;
   const value: Json = {
-    ready: Boolean(yt && ff && fp && deno),
+    ready: Boolean(yt && ff && fp && deno), platform: PLATFORM,
     yt_dlp: { path: (await existsFile(YTDLP)) ? YTDLP : null, version: yt },
     ffmpeg: { path: (await existsFile(FFMPEG)) ? FFMPEG : null, version: ff },
     ffprobe: { path: (await existsFile(FFPROBE)) ? FFPROBE : null, version: fp },
@@ -327,7 +356,7 @@ async function commonYtdlpArgs(settings: Settings): Promise<string[]> {
   for (const [name, path] of [['yt-dlp', YTDLP], ['ffmpeg', FFMPEG], ['ffprobe', FFPROBE], ['Deno', DENO_BIN]]) {
     if (!(await existsFile(path))) missing.push(name);
   }
-  if (missing.length) throw new Error(`Не найдено окружение: ${missing.join(', ')}. Запустите UPDATE.command.`);
+  if (missing.length) throw new Error(`Не найдено окружение: ${missing.join(', ')}. Запустите платформенное обновление/установщик LocalTube.`);
   return [
     '--ignore-config', '--no-colors',
     '--js-runtimes', `deno:${DENO_BIN}`,
@@ -546,11 +575,22 @@ class JobManager {
     j.state = 'running'; j.started_at = nowIso(); j.phase = 'Подготовка'; await this.persist();
     try {
       const args = await buildDownloadCommand(j);
+      const root = PLATFORM === 'windows' ? (Deno.env.get('SystemRoot') || 'C:/Windows') : '';
+      const childPath = PLATFORM === 'windows'
+        ? `${RUNTIME_DIR};${root}/System32;${root}/System32/WindowsPowerShell/v1.0`
+        : `${RUNTIME_DIR}:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`;
       const childEnv: Record<string, string> = {
-        HOME, PATH: `${RUNTIME_DIR}:/usr/bin:/bin:/usr/sbin:/sbin`,
-        USER: Deno.env.get('USER') || '', LOGNAME: Deno.env.get('LOGNAME') || Deno.env.get('USER') || '',
-        TMPDIR: Deno.env.get('TMPDIR') || '/tmp', LANG: Deno.env.get('LANG') || 'en_US.UTF-8',
+        HOME, PATH: childPath,
+        USER: Deno.env.get('USER') || Deno.env.get('USERNAME') || '',
+        LOGNAME: Deno.env.get('LOGNAME') || Deno.env.get('USER') || Deno.env.get('USERNAME') || '',
+        TMPDIR: Deno.env.get('TMPDIR') || Deno.env.get('TEMP') || '/tmp',
+        LANG: Deno.env.get('LANG') || 'en_US.UTF-8',
       };
+      if (PLATFORM === 'windows') {
+        childEnv.USERPROFILE = Deno.env.get('USERPROFILE') || HOME;
+        childEnv.SystemRoot = root;
+        childEnv.TEMP = Deno.env.get('TEMP') || childEnv.TMPDIR;
+      }
       const child = new Deno.Command(YTDLP, {
         args, stdin: 'null', stdout: 'piped', stderr: 'piped', cwd: j.settings.download_dir, env: childEnv,
       }).spawn();
@@ -598,31 +638,95 @@ class JobManager {
   }
 }
 
+function windowsPowerShell(): string {
+  const root = Deno.env.get('SystemRoot') || 'C:/Windows';
+  return `${root}/System32/WindowsPowerShell/v1.0/powershell.exe`;
+}
+function windowsExplorer(): string {
+  const root = Deno.env.get('SystemRoot') || 'C:/Windows';
+  return `${root}/explorer.exe`;
+}
 async function chooseFolder(): Promise<string> {
-  const script = 'POSIX path of (choose folder with prompt "Выберите папку для загрузок LocalTube")';
-  const r = await runCapture('/usr/bin/osascript', ['-e', script], 120_000);
-  if (r.code !== 0) { if (r.stderr.includes('User canceled')) return ''; throw new Error(r.stderr.trim() || 'Не удалось открыть выбор папки.'); }
-  return r.stdout.trim().replace(/\/$/, '') || '/';
+  if (PLATFORM === 'darwin') {
+    const script = 'POSIX path of (choose folder with prompt "Выберите папку для загрузок LocalTube")';
+    const r = await runCapture('/usr/bin/osascript', ['-e', script], 120_000);
+    if (r.code !== 0) { if (r.stderr.includes('User canceled')) return ''; throw new Error(r.stderr.trim() || 'Не удалось открыть выбор папки.'); }
+    return r.stdout.trim().replace(/\/$/, '') || '/';
+  }
+  if (PLATFORM === 'windows') {
+    const script = "Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='Выберите папку для загрузок LocalTube'; if($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){[Console]::Out.Write($d.SelectedPath)}";
+    const r = await runCapture(windowsPowerShell(), ['-NoProfile', '-NonInteractive', '-Command', script], 120_000);
+    if (r.code !== 0) throw new Error(r.stderr.trim() || 'Не удалось открыть выбор папки.');
+    return r.stdout.trim();
+  }
+  for (const candidate of ['/usr/bin/zenity', '/usr/bin/kdialog']) {
+    if (!(await existsFile(candidate))) continue;
+    const args = candidate.endsWith('zenity')
+      ? ['--file-selection', '--directory', '--title=Выберите папку для загрузок LocalTube']
+      : ['--getexistingdirectory', HOME, '--title', 'Выберите папку для загрузок LocalTube'];
+    const r = await runCapture(candidate, args, 120_000);
+    if (r.code === 0) return r.stdout.trim().replace(/\/$/, '') || '/';
+    if (r.code === 1) return '';
+  }
+  throw new Error('Для выбора папки в Linux установите zenity или kdialog.');
 }
 async function chooseCookieFile(): Promise<string> {
-  const script = 'POSIX path of (choose file with prompt "Выберите cookies.txt для LocalTube")';
-  const r = await runCapture('/usr/bin/osascript', ['-e', script], 120_000);
-  if (r.code !== 0) { if (r.stderr.includes('User canceled')) return ''; throw new Error(r.stderr.trim() || 'Не удалось открыть выбор файла.'); }
-  return r.stdout.trim();
+  if (PLATFORM === 'darwin') {
+    const script = 'POSIX path of (choose file with prompt "Выберите cookies.txt для LocalTube")';
+    const r = await runCapture('/usr/bin/osascript', ['-e', script], 120_000);
+    if (r.code !== 0) { if (r.stderr.includes('User canceled')) return ''; throw new Error(r.stderr.trim() || 'Не удалось открыть выбор файла.'); }
+    return r.stdout.trim();
+  }
+  if (PLATFORM === 'windows') {
+    const script = "Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.OpenFileDialog; $d.Title='Выберите cookies.txt для LocalTube'; $d.Filter='cookies.txt|*.txt|Все файлы|*.*'; if($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){[Console]::Out.Write($d.FileName)}";
+    const r = await runCapture(windowsPowerShell(), ['-NoProfile', '-NonInteractive', '-Command', script], 120_000);
+    if (r.code !== 0) throw new Error(r.stderr.trim() || 'Не удалось открыть выбор файла.');
+    return r.stdout.trim();
+  }
+  for (const candidate of ['/usr/bin/zenity', '/usr/bin/kdialog']) {
+    if (!(await existsFile(candidate))) continue;
+    const args = candidate.endsWith('zenity')
+      ? ['--file-selection', '--title=Выберите cookies.txt для LocalTube', '--file-filter=*.txt']
+      : ['--getopenfilename', HOME, '*.txt', '--title', 'Выберите cookies.txt для LocalTube'];
+    const r = await runCapture(candidate, args, 120_000);
+    if (r.code === 0) return r.stdout.trim();
+    if (r.code === 1) return '';
+  }
+  throw new Error('Для выбора cookies.txt в Linux установите zenity или kdialog.');
 }
 async function diskInfo(path: string): Promise<Json> {
   try {
-    const r = await runCapture('/bin/df', ['-kP', path], 5000);
-    const line = r.stdout.trim().split(/\r?\n/).at(-1) || '';
-    const parts = line.trim().split(/\s+/); if (parts.length >= 6) {
-      const total = Number(parts[1]) * 1024, used = Number(parts[2]) * 1024, free = Number(parts[3]) * 1024;
-      if ([total, used, free].every(Number.isFinite)) return { total, used, free };
+    if (PLATFORM === 'windows') {
+      const script = "$p=$args[0]; $full=(Resolve-Path -LiteralPath $p).Path; $root=[System.IO.Path]::GetPathRoot($full); $d=New-Object System.IO.DriveInfo($root); [Console]::Out.Write(('{0}|{1}' -f $d.TotalSize,$d.AvailableFreeSpace))";
+      const r = await runCapture(windowsPowerShell(), ['-NoProfile', '-NonInteractive', '-Command', script, path], 8000);
+      const [totalRaw, freeRaw] = r.stdout.trim().split('|');
+      const total = Number(totalRaw), free = Number(freeRaw);
+      if (Number.isFinite(total) && Number.isFinite(free)) return { total, used: total - free, free };
+    } else {
+      const df = await existsFile('/bin/df') ? '/bin/df' : '/usr/bin/df';
+      const r = await runCapture(df, ['-kP', path], 5000);
+      const line = r.stdout.trim().split(/\r?\n/).at(-1) || '';
+      const parts = line.trim().split(/\s+/); if (parts.length >= 6) {
+        const total = Number(parts[1]) * 1024, used = Number(parts[2]) * 1024, free = Number(parts[3]) * 1024;
+        if ([total, used, free].every(Number.isFinite)) return { total, used, free };
+      }
     }
   } catch { /* ignore */ }
   return { total: 0, used: 0, free: 0 };
 }
-function openDetached(args: string[]): void {
-  try { new Deno.Command('/usr/bin/open', { args, stdin: 'null', stdout: 'null', stderr: 'null' }).spawn(); } catch { /* ignore */ }
+function openFolderPath(path: string): void {
+  try {
+    if (PLATFORM === 'darwin') new Deno.Command('/usr/bin/open', { args: [path], stdin: 'null', stdout: 'null', stderr: 'null' }).spawn();
+    else if (PLATFORM === 'windows') new Deno.Command(windowsExplorer(), { args: [path], stdin: 'null', stdout: 'null', stderr: 'null' }).spawn();
+    else new Deno.Command('/usr/bin/xdg-open', { args: [path], stdin: 'null', stdout: 'null', stderr: 'null' }).spawn();
+  } catch { /* ignore */ }
+}
+function revealPath(path: string): void {
+  try {
+    if (PLATFORM === 'darwin') new Deno.Command('/usr/bin/open', { args: ['-R', path], stdin: 'null', stdout: 'null', stderr: 'null' }).spawn();
+    else if (PLATFORM === 'windows') new Deno.Command(windowsExplorer(), { args: [`/select,${path}`], stdin: 'null', stdout: 'null', stderr: 'null' }).spawn();
+    else openFolderPath(dirname(path));
+  } catch { /* ignore */ }
 }
 
 function securityHeaders(): Headers {
@@ -772,9 +876,9 @@ async function main(): Promise<void> {
       m = url.pathname.match(/^\/api\/jobs\/([a-f0-9]{12})\/reveal$/);
       if (req.method === 'POST' && m) {
         await bodyJson(req); const j = jobs.get(m[1]); if (!j) return errorResponse('Загрузка не найдена', 404);
-        const target = j.outputs.at(-1) || j.settings.download_dir; openDetached((await existsFile(target)) ? ['-R', target] : [target]); return jsonResponse({ ok: true });
+        const target = j.outputs.at(-1) || j.settings.download_dir; if (await existsFile(target)) revealPath(target); else openFolderPath(target); return jsonResponse({ ok: true });
       }
-      if (req.method === 'POST' && url.pathname === '/api/open-folder') { await bodyJson(req); openDetached([(await loadSettings()).download_dir]); return jsonResponse({ ok: true }); }
+      if (req.method === 'POST' && url.pathname === '/api/open-folder') { await bodyJson(req); openFolderPath((await loadSettings()).download_dir); return jsonResponse({ ok: true }); }
       if (req.method === 'POST' && url.pathname === '/api/update-ytdlp') {
         await bodyJson(req);
         if (jobs.hasActive()) return errorResponse('Обновление загрузчика недоступно, пока есть активные загрузки.', 409);

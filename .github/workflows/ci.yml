@@ -9,10 +9,15 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   static:
-    name: Static / cross-build
+    name: Static + package build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,13 +31,59 @@ jobs:
           node-version: '22'
       - name: TypeScript compiler
         run: npm install --global typescript@5.8.3
-      - name: Full local audit
+      - name: Full source and package audit
+        shell: bash
         run: ./scripts/test.sh
+      - name: Upload bootstrap packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalTube-bootstrap-packages
+          path: |
+            dist/LocalTube-macOS-v*.zip
+            dist/LocalTube-macOS-v*.zip.sha256
+            dist/LocalTube-Linux-v*.tar.gz
+            dist/LocalTube-Linux-v*.tar.gz.sha256
+            dist/LocalTube-Windows-v*.zip
+            dist/LocalTube-Windows-v*.zip.sha256
+          if-no-files-found: error
+
+  linux-integration:
+    name: Linux runtime + backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Real Linux integration
+        shell: bash
+        run: ./scripts/ci_linux_integration.sh
+
+  windows-integration:
+    name: Windows runtime + backend
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: PowerShell syntax + real Windows integration
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(
+            'installer/install-windows.ps1',
+            'app/scripts/runtime_windows.ps1',
+            'app/scripts/run_server.ps1',
+            'scripts/ci_windows_integration.ps1'
+          ) + (Get-ChildItem 'control/windows/*.ps1' | ForEach-Object { $_.FullName })
+          foreach ($file in $files) {
+            $tokens = $null; $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors)
+            if ($errors.Count -gt 0) { $errors | Format-List | Out-String | Write-Error }
+          }
+          .\scripts\ci_windows_integration.ps1
 
   macos-integration:
     name: macOS runtime + YouTube E2E
     runs-on: macos-14
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -45,7 +96,7 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --global typescript@5.8.3
-      - name: Shell / source audit
+      - name: Source/package audit on macOS
         shell: bash
         run: ./scripts/test.sh
       - name: Real macOS integration

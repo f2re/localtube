@@ -2,104 +2,201 @@
 
 # 🎬 LocalTube
 
-**Локальный macOS‑сервис для загрузки видео и аудио с YouTube в свою папку — без облака, аккаунта LocalTube и фоновой отправки данных.**
+**Локальная загрузка видео и аудио с YouTube для macOS, Linux и Windows.**
+Один интерфейс, один backend, локальное хранение и никакого облачного сервиса LocalTube.
 
 [![CI](https://github.com/f2re/localtube/actions/workflows/ci.yml/badge.svg)](https://github.com/f2re/localtube/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/f2re/localtube?display_name=tag&sort=semver)](https://github.com/f2re/localtube/releases)
-[![macOS 11+](https://img.shields.io/badge/macOS-11%2B-111111?logo=apple)](https://github.com/f2re/localtube)
-[![Apple Silicon + Intel](https://img.shields.io/badge/CPU-Apple%20Silicon%20%7C%20Intel-555)](https://github.com/f2re/localtube)
+[![macOS](https://img.shields.io/badge/macOS-11%2B-111111?logo=apple)](https://github.com/f2re/localtube)
+[![Linux](https://img.shields.io/badge/Linux-x86__64%20%7C%20arm64-333?logo=linux)](https://github.com/f2re/localtube)
+[![Windows](https://img.shields.io/badge/Windows-10%2F11-0078d4?logo=windows)](https://github.com/f2re/localtube)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE)
 [![yt-dlp](https://img.shields.io/badge/engine-yt--dlp-ff3040)](https://github.com/yt-dlp/yt-dlp)
 
 </div>
 
-LocalTube превращает `yt-dlp + FFmpeg + Deno` в обычный локальный сервис: вставил ссылку → увидел видео и доступные разрешения → выбрал видео или аудио → файл появился в указанной папке. Интерфейс открывается в браузере, но backend слушает только `127.0.0.1` и не публикуется в локальную сеть.
+LocalTube превращает `yt-dlp + FFmpeg + Deno` в обычное локальное приложение: вставляете ссылку → LocalTube определяет видео и доступное качество → выбираете видео или аудио → файл сохраняется в выбранной папке.
+
+Интерфейс открывается в браузере, но backend слушает **только `127.0.0.1`**. Данные, история и настройки остаются на компьютере.
 
 ![Главный экран LocalTube](docs/screenshots/main.png)
 
 ## ✨ Что умеет
 
-- 🎥 видео в лучшем качестве или с верхним пределом 2160p / 1440p / 1080p / 720p / 480p / 360p;
-- 🍎 MP4 с приоритетом нативных H.264/AAC потоков, MKV или исходного контейнера; лишнее перекодирование не навязывается;
-- 🎧 аудио M4A, MP3, Opus, FLAC или исходный аудиопоток;
+- 🎥 видео в лучшем качестве или с ограничением 2160p / 1440p / 1080p / 720p / 480p / 360p;
+- 📦 MP4, MKV или исходный контейнер; для MP4 приоритет H.264/AAC без обязательного перекодирования;
+- 🎧 M4A, MP3, Opus, FLAC или исходный аудиопоток;
 - 📚 плейлисты, очередь, прогресс, скорость, ETA, отмена и история;
-- 📁 нативный выбор папки macOS и «Показать в Finder»;
-- 🍪 cookies из поддерживаемого браузера или `cookies.txt`, когда видео требует входа;
-- 🩺 встроенная диагностика `yt-dlp / FFmpeg / Deno / YouTube`;
-- 🔄 безопасное обновление `yt-dlp` из интерфейса и транзакционное обновление всего runtime;
-- 📴 после установки UI/backend не требуют npm, pip, Homebrew или внешних JS‑пакетов приложения.
+- 📁 выбор папки и открытие готового файла средствами текущей ОС;
+- 🍪 cookies из браузера или `cookies.txt`, когда YouTube требует авторизацию;
+- 🩺 диагностика `yt-dlp / FFmpeg / Deno / YouTube`;
+- 🔄 безопасное обновление `yt-dlp`;
+- 📴 после установки интерфейс и backend не требуют npm, pip или системной Node.js;
+- 🔐 localhost-only API с локальным токеном и ограниченными правами Deno.
 
 ![Аудио и дополнительные параметры](docs/screenshots/audio-settings.png)
 
-## 🚀 Установка на macOS
+## 🖥️ Поддерживаемые платформы
 
-1. Скачайте ZIP из **Releases** и распакуйте его Finder.
-2. Запустите **`Install LocalTube.app`**. Это основной установщик: он **не открывает Terminal, не запускает zsh и не читает `.zshrc`, Oh‑My‑Zsh, Homebrew shellenv, pyenv и т. п.**
-3. При первом запуске установщик скачает подходящие вашему CPU Deno, `yt-dlp_macos`, FFmpeg и FFprobe, проверит SHA‑256, проведёт self-test, установит `~/Applications/LocalTube.app` и запустит локальный LaunchAgent.
-4. Дальше открывайте `~/Applications/LocalTube.app` как обычное приложение.
+| ОС | Архитектуры | Установка | Автозапуск |
+|---|---|---|---|
+| **macOS 11+** | Apple Silicon, Intel x86_64 | `Install LocalTube.app` | LaunchAgent |
+| **Linux** | x86_64, arm64/aarch64 | `./INSTALL.sh` без `sudo` | `systemd --user`, если доступен |
+| **Windows 10/11** | x64, ARM64 | `INSTALL.ps1` без администратора | запуск из меню «Пуск» |
 
-Требования: **macOS 11 Big Sur или новее**, Apple Silicon (`arm64`) либо Intel (`x86_64`), интернет при первой установке. Сам bootstrap‑архив не содержит сторонние runtime‑бинарники: они загружаются для конкретной архитектуры при установке.
+Все три пакета содержат одинаковый web/backend-код. Отличаются только bootstrap-установщик, управление процессом, диалоги выбора файлов и runtime-бинарники для конкретной ОС.
 
-> Если macOS предупреждает о приложении от неизвестного разработчика, используйте Finder → правый клик → **Открыть**. Для полностью бесшовной установки через Gatekeeper релиз должен быть подписан Developer ID и нотарифицирован Apple; workflow и инструкция для этого включены в репозиторий.
+## 🚀 Установка
 
-### Если `.zshrc` сломан
+Готовые архивы публикуются в **Releases**:
 
-Это не влияет на основной `Install LocalTube.app`. Резервный `INSTALL.command` также сам запускает `/bin/bash --noprofile --norc` в чистом окружении, но **Terminal до запуска `.command` сначала стартует ваш login shell**, поэтому неисправный `.zshrc` может успеть напечатать свои ошибки. Именно поэтому `.app` является штатным способом установки.
+- `LocalTube-macOS-vX.Y.Z.zip`
+- `LocalTube-Linux-vX.Y.Z.tar.gz`
+- `LocalTube-Windows-vX.Y.Z.zip`
 
-Если резервный установщик всё же запускается вручную из zsh, путь должен быть абсолютным или относительным с `./`:
+Рядом с каждым архивом публикуется файл `.sha256`. Внутри пакета также есть `MANIFEST.sha256` для проверки содержимого.
 
-```bash
-./INSTALL.command
-# либо
-/Users/имя/Downloads/LocalTube-macOS-v1.3.0/INSTALL.command
-```
+### 🍎 macOS
 
-`Users/имя/...` без начального `/` — это относительный путь и zsh закономерно его не найдёт.
+1. Скачайте `LocalTube-macOS-...zip` и распакуйте.
+2. Запустите **`Install LocalTube.app`**.
+3. Установщик скачает Deno, `yt-dlp`, FFmpeg и FFprobe для вашего CPU, проверит SHA-256 и выполнит self-test.
+4. Запускайте `~/Applications/LocalTube.app`.
 
-## 🧱 Как устроено
+Основной `.app`-установщик не зависит от `.zshrc`, Oh-My-Zsh, Homebrew shellenv или pyenv. Резервный `INSTALL.command` оставлен для ручной диагностики.
+
+Если Gatekeeper предупреждает о неизвестном разработчике, откройте приложение через Finder → правый клик → **Открыть**. Полностью бесшовный Gatekeeper требует Developer ID и нотарификации Apple.
+
+### 🐧 Linux
+
+1. Скачайте `LocalTube-Linux-...tar.gz`.
+2. Распакуйте и откройте каталог:
+   ```bash
+   tar -xzf LocalTube-Linux-v*.tar.gz
+   cd LocalTube-Linux-v*
+   ```
+3. Запустите:
+   ```bash
+   ./INSTALL.sh
+   ```
+4. После установки используйте пункт **LocalTube** в меню приложений или команду:
+   ```bash
+   ~/.local/bin/localtube
+   ```
+
+Установка выполняется **без `sudo`** в `${XDG_DATA_HOME:-~/.local/share}/localtube`. Если доступен `systemd --user`, создаётся пользовательский сервис. Если его нет, launcher запускает локальный процесс напрямую.
+
+Для нативного графического выбора папки рекомендуется `zenity` или `kdialog`. Без них сам сервис и загрузка работают, но папку удобнее предварительно задать в настройках/конфигурации.
+
+### 🪟 Windows
+
+1. Скачайте `LocalTube-Windows-...zip` и распакуйте.
+2. Запустите **`INSTALL.ps1`** через PowerShell.
+3. Если политика Windows блокирует локальный скрипт, из каталога пакета выполните:
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1
+   ```
+4. После установки запускайте **LocalTube** из меню «Пуск».
+
+Приложение устанавливается без прав администратора в `%LOCALAPPDATA%\LocalTube`. Runtime и настройки не пишутся в `Program Files` и не требуют системной установки Python/Node.js.
+
+## 🧱 Архитектура
 
 ```text
-LocalTube.app
-    │ open http://127.0.0.1:<port>/
-    ▼
-launchd → run_server.sh → Deno → server.ts
-                              │
-                              ├─ yt-dlp_macos ── YouTube
-                              ├─ FFmpeg / FFprobe
-                              └─ osascript / Finder
+                        ┌───────────────────────────────┐
+                        │  Browser UI                  │
+                        │  http://127.0.0.1:<port>/    │
+                        └──────────────┬────────────────┘
+                                       │ local token
+                                       ▼
+                         ┌──────────────────────────┐
+                         │ Deno + app/server.ts     │
+                         │ localhost only           │
+                         └───────────┬──────────────┘
+                                     │
+                    ┌────────────────┼────────────────┐
+                    ▼                ▼                ▼
+                 yt-dlp           FFmpeg          FFprobe
+                    │
+                  YouTube
+
+macOS:   LaunchAgent + LocalTube.app + Finder/osascript
+Linux:   systemd --user/fallback + xdg-open + zenity/kdialog
+Windows: PowerShell launcher + Explorer + Windows Forms dialogs
 ```
 
-Сервис хранится в `~/Library/Application Support/LocalTube/`. LaunchAgent — `~/Library/LaunchAgents/com.localtube.service.plist`. По умолчанию загрузки идут в `~/Movies/LocalTube`; папка меняется из интерфейса.
+Каталоги данных:
+
+```text
+macOS    ~/Library/Application Support/LocalTube/
+Linux    ${XDG_DATA_HOME:-~/.local/share}/localtube/
+Windows  %LOCALAPPDATA%\LocalTube\
+```
+
+Backend, runtime, данные, логи и кэш разделены внутри каталога приложения.
+
+## 📦 Runtime
+
+Установщик подбирает runtime по ОС и архитектуре:
+
+- **Deno** — официальный release;
+- **yt-dlp** — официальный nightly, затем stable fallback;
+- **FFmpeg / FFprobe** — готовая сборка для соответствующей платформы;
+- если сетевой bootstrap недоступен, Unix/Windows installer может использовать совместимую локальную установку как fallback, не изменяя её.
+
+Скачанные компоненты проходят SHA-256-проверку там, где upstream публикует контрольные суммы. Активные версии и происхождение компонентов записываются в `runtime/manifest.json`.
 
 ## 🔐 Безопасность и приватность
 
-Backend привязан только к loopback. API использует случайный локальный токен, проверяет `Host` и `Origin`, CORS не включён. Пользовательский URL проходит allowlist YouTube/youtu.be; команды запускаются через `Deno.Command` без shell-интерполяции. `yt-dlp` всегда получает `--ignore-config`, поэтому случайный глобальный `yt-dlp.conf` не меняет поведение LocalTube.
-
-Deno запускается без `-A`: разрешены файловые операции, необходимые для выбранной пользователем папки/cookies, loopback‑сокет и строго ограниченный набор subprocess. При установке скачанные runtime‑компоненты проверяются по upstream SHA‑256. Сам релиз содержит `MANIFEST.sha256`, а рядом с ZIP публикуется SHA‑256 всего архива.
+- сервер привязан к `127.0.0.1`, а не к LAN-интерфейсу;
+- API использует случайный локальный токен;
+- проверяются `Host` и `Origin`;
+- CORS не включён;
+- пользовательские URL проходят allowlist YouTube/youtu.be;
+- `yt-dlp` всегда запускается с `--ignore-config`;
+- subprocess вызываются через `Deno.Command`, без shell-интерполяции пользовательского ввода;
+- Deno получает только необходимые файловые, сетевые и process-разрешения;
+- runtime хранится отдельно от системных инструментов.
 
 Подробности: [SECURITY.md](SECURITY.md) и [AUDIT.md](AUDIT.md).
 
-## 🧰 Runtime и обновления
+## 🔄 Обновления
 
-LocalTube предпочитает официальный универсальный `yt-dlp_macos` nightly, официальный Deno для `arm64`/`x86_64` и подписанные macOS‑сборки FFmpeg/FFprobe от Martin Riedl. Если конкретный upstream временно недоступен, bootstrap умеет использовать уже установленный совместимый runtime из стандартных Homebrew/MacPorts/user locations через локальный wrapper. Источник каждой активной компоненты записывается в `runtime/manifest.json`.
+Из интерфейса можно обновить собственный `yt-dlp`. Если LocalTube использует внешний fallback-runtime, самообновление этой внешней копии блокируется: системная установка пользователя не должна изменяться скрытно.
 
-Из интерфейса можно безопасно обновить собственный `yt-dlp`. Если используется внешний fallback‑`yt-dlp`, локальное самообновление блокируется — требуется полное обновление runtime, чтобы случайно не менять чужую системную установку.
+Полное обновление выполняется платформенным installer/control-механизмом. Настройки и история хранятся отдельно от кода/runtime и сохраняются при штатном обновлении.
 
-## 🧪 Проверка и разработка
+## 🧪 Разработка и проверка
+
+Базовые проверки:
 
 ```bash
 ./scripts/test.sh
-python3 scripts/build_release.py
 ```
 
-`test.sh` проверяет shell, Bash 3.2‑совместимость, TypeScript/JavaScript, security invariants, universal Mach‑O launcher и структуру релиза. GitHub Actions дополнительно запускает integration test на настоящем **macOS runner**, скачивает runtime тем же installer‑кодом, выполняет Deno/backend self-test и собирает ZIP/DMG.
+Они выполняют:
+
+- shell/PowerShell/static checks;
+- TypeScript/JavaScript validation;
+- проверку ограничений безопасности;
+- сборку macOS universal launcher;
+- сборку **трёх** bootstrap-пакетов;
+- проверку структуры архивов и SHA-256.
+
+GitHub Actions дополнительно запускает integration tests на:
+
+- Ubuntu/Linux;
+- Windows;
+- настоящем macOS runner.
+
+На всех трёх ОС integration-проходы разворачивают тот же runtime, который использует пользовательский installer, и проверяют backend self-test и запуск ограниченного локального сервера. На macOS дополнительно проверяется HTTP queue/download flow; live-проверка YouTube учитывает возможную anti-bot блокировку IP GitHub-hosted runner и в таком случае отдельно проверяет локальный медиаконвейер.
 
 См. [CONTRIBUTING.md](CONTRIBUTING.md) и [docs/RELEASING.md](docs/RELEASING.md).
 
 ## ⚖️ Использование
 
-LocalTube — оболочка над открытыми инструментами и не обходит DRM. Загружайте только материалы, которые вы вправе сохранять; правила платформы и законодательство зависят от юрисдикции и конкретного контента. Проект не связан с YouTube или Google.
+LocalTube — оболочка над открытыми инструментами и не обходит DRM. Сохраняйте только материалы, которые вы вправе загружать. Правила платформы и законодательство зависят от юрисдикции и конкретного контента. Проект не связан с YouTube или Google.
 
 ## 📄 Лицензия
 
-Код LocalTube — [MIT](LICENSE). Загружаемые сторонние компоненты имеют собственные лицензии; перечень и источники приведены в [THIRD_PARTY.md](THIRD_PARTY.md).
+Код LocalTube — [MIT](LICENSE). Сторонние runtime-компоненты имеют собственные лицензии; источники и лицензии перечислены в [THIRD_PARTY.md](THIRD_PARTY.md).

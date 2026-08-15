@@ -1,10 +1,16 @@
 #!/bin/bash
-# Executed by launchd directly. It deliberately ignores the user's interactive shell setup.
-# Apple /bin/bash 3.2 compatible.
+# LocalTube server launcher for macOS/Linux. No interactive shell profiles are sourced.
 set -u
 umask 077
 
-BASE="${LOCALTUBE_BASE:-$HOME/Library/Application Support/LocalTube}"
+OS="$(uname -s 2>/dev/null || printf unknown)"
+case "$OS" in
+  Darwin) DEFAULT_BASE="$HOME/Library/Application Support/LocalTube" ;;
+  Linux) DEFAULT_BASE="${XDG_DATA_HOME:-$HOME/.local/share}/localtube" ;;
+  *) printf 'LocalTube: unsupported Unix platform: %s\n' "$OS" >&2; exit 69 ;;
+esac
+
+BASE="${LOCALTUBE_BASE:-$DEFAULT_BASE}"
 RUNTIME="$BASE/runtime"
 APP="$BASE/app"
 LOGS="$BASE/logs"
@@ -12,34 +18,41 @@ DATA="$BASE/data"
 PORT='8765'
 
 if [ -f "$DATA/port" ]; then
-  READ_PORT="$(/usr/bin/tr -cd '0-9' < "$DATA/port" 2>/dev/null)"
+  READ_PORT="$(tr -cd '0-9' < "$DATA/port" 2>/dev/null)"
   if [ -n "$READ_PORT" ] && [ "$READ_PORT" -ge 1024 ] 2>/dev/null && [ "$READ_PORT" -le 65535 ] 2>/dev/null; then PORT="$READ_PORT"; fi
 fi
 
-/bin/mkdir -p "$LOGS" "$DATA" "$BASE/cache/deno"
-/bin/chmod 700 "$DATA" "$LOGS" "$BASE/cache" "$BASE/cache/deno" >/dev/null 2>&1 || true
+mkdir -p "$LOGS" "$DATA" "$BASE/cache/deno"
+chmod 700 "$DATA" "$LOGS" "$BASE/cache" "$BASE/cache/deno" >/dev/null 2>&1 || true
+printf '%s\n' "$$" > "$DATA/server.pid"
 
-[ -x "$RUNTIME/deno" ] || { printf 'LocalTube: Deno runtime missing: %s\n' "$RUNTIME/deno" >&2; exit 70; }
-[ -x "$RUNTIME/yt-dlp" ] || { printf 'LocalTube: yt-dlp runtime missing: %s\n' "$RUNTIME/yt-dlp" >&2; exit 70; }
-[ -x "$RUNTIME/ffmpeg" ] || { printf 'LocalTube: FFmpeg runtime missing: %s\n' "$RUNTIME/ffmpeg" >&2; exit 70; }
-[ -x "$RUNTIME/ffprobe" ] || { printf 'LocalTube: FFprobe runtime missing: %s\n' "$RUNTIME/ffprobe" >&2; exit 70; }
+for tool in deno yt-dlp ffmpeg ffprobe; do
+  [ -x "$RUNTIME/$tool" ] || { printf 'LocalTube: runtime missing: %s\n' "$RUNTIME/$tool" >&2; exit 70; }
+done
 [ -f "$APP/server.ts" ] || { printf 'LocalTube: server missing: %s\n' "$APP/server.ts" >&2; exit 71; }
 
-# Deterministic environment. No ~/.zshrc, ~/.bashrc, Oh-My-Zsh, Homebrew or shell PATH is used.
 export HOME
 export LOCALTUBE_BASE="$BASE"
 export LOCALTUBE_PORT="$PORT"
 export DENO_DIR="$BASE/cache/deno"
-export PATH="$RUNTIME:/usr/bin:/bin:/usr/sbin:/sbin"
+if [ "$OS" = Darwin ]; then
+  export PATH="$RUNTIME:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+else
+  export PATH="$RUNTIME:/usr/local/bin:/usr/bin:/bin"
+fi
 export LANG="${LANG:-en_US.UTF-8}"
 export TMPDIR="${TMPDIR:-/tmp}"
 unset BASH_ENV ENV ZDOTDIR CDPATH PYTHONPATH PYTHONHOME NODE_OPTIONS DENO_CONFIG
 
-# The backend needs arbitrary read/write access because the user can select any local download
-# folder or cookies.txt. Other Deno capabilities remain restricted: no FFI, no subprocesses
-# except the explicit tools below, and network listening only on loopback.
-ALLOW_RUN="$RUNTIME/yt-dlp,$RUNTIME/ffmpeg,$RUNTIME/ffprobe,/usr/bin/osascript,/usr/bin/open,/usr/bin/pkill,/bin/df"
-ALLOW_ENV='HOME,USER,LOGNAME,PATH,TMPDIR,LANG,LOCALTUBE_BASE,LOCALTUBE_PORT,LOCALTUBE_APP_DIR,LOCALTUBE_RUNTIME_DIR,DENO_DIR'
+ALLOW_RUN="$RUNTIME/yt-dlp,$RUNTIME/ffmpeg,$RUNTIME/ffprobe"
+if [ "$OS" = Darwin ]; then
+  ALLOW_RUN="$ALLOW_RUN,/usr/bin/osascript,/usr/bin/open,/usr/bin/pkill,/bin/df,/usr/bin/df"
+else
+  for cmd in /usr/bin/pkill /bin/pkill /bin/df /usr/bin/df /usr/bin/xdg-open /usr/bin/zenity /usr/bin/kdialog; do
+    [ -x "$cmd" ] && ALLOW_RUN="$ALLOW_RUN,$cmd"
+  done
+fi
+ALLOW_ENV='HOME,USER,LOGNAME,PATH,TMPDIR,LANG,LOCALTUBE_BASE,LOCALTUBE_PORT,LOCALTUBE_APP_DIR,LOCALTUBE_RUNTIME_DIR,DENO_DIR,XDG_DATA_HOME,XDG_CONFIG_HOME,XDG_CACHE_HOME,DISPLAY,WAYLAND_DISPLAY'
 
 exec "$RUNTIME/deno" run --no-config --no-prompt \
   --allow-read --allow-write \

@@ -1,0 +1,37 @@
+#!/bin/sh
+set -eu
+BASE="${LOCALTUBE_BASE:-${XDG_DATA_HOME:-$HOME/.local/share}/localtube}"
+DATA="$BASE/data"; APP="$BASE/app"; LOGS="$BASE/logs"
+PORT="$(tr -cd '0-9' < "$DATA/port" 2>/dev/null || printf 8765)"
+[ -n "$PORT" ] || PORT=8765
+
+health() {
+  [ -f "$DATA/api_token" ] || return 1
+  token="$(tr -d '\r\n' < "$DATA/api_token")"
+  curl -fsS --max-time 3 -H "X-LocalTube-Token: $token" "http://127.0.0.1:$PORT/api/health" 2>/dev/null | grep -q '"ok":true'
+}
+start_service() {
+  if health; then :; elif command -v systemctl >/dev/null 2>&1 && systemctl --user start localtube.service >/dev/null 2>&1; then :; else
+    mkdir -p "$LOGS"
+    nohup /bin/bash --noprofile --norc "$APP/scripts/run_server.sh" >>"$LOGS/stdout.log" 2>>"$LOGS/stderr.log" </dev/null &
+  fi
+  i=0
+  while [ "$i" -lt 30 ]; do health && break; sleep 1; i=$((i+1)); done
+  health || { echo "LocalTube failed to start. See $LOGS/stderr.log" >&2; exit 1; }
+  command -v xdg-open >/dev/null 2>&1 && xdg-open "http://127.0.0.1:$PORT/" >/dev/null 2>&1 || true
+}
+stop_service() {
+  command -v systemctl >/dev/null 2>&1 && systemctl --user stop localtube.service >/dev/null 2>&1 || true
+  if [ -f "$DATA/server.pid" ]; then pid="$(tr -cd '0-9' < "$DATA/server.pid")"; [ -n "$pid" ] && kill "$pid" >/dev/null 2>&1 || true; fi
+}
+case "${1:-start}" in
+  start|open) start_service ;;
+  stop) stop_service ;;
+  status) if health; then echo 'LocalTube: running'; else echo 'LocalTube: stopped'; exit 1; fi ;;
+  diagnose)
+    health || { echo 'LocalTube is not running' >&2; exit 1; }
+    token="$(tr -d '\r\n' < "$DATA/api_token")"
+    curl -fsS -H 'Content-Type: application/json' -H "X-LocalTube-Token: $token" -X POST --data '{}' "http://127.0.0.1:$PORT/api/diagnostics"
+    ;;
+  *) echo 'Usage: localtube {start|stop|status|diagnose}' >&2; exit 2 ;;
+esac

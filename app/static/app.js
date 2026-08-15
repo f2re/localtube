@@ -42,7 +42,7 @@
     const s = Math.floor(sec % 60), m0 = Math.floor(sec / 60), m = m0 % 60, h = Math.floor(m0 / 60);
     return h ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`;
   }
-  function basename(p) { return (p || '').replace(/\/$/, '').split('/').pop() || p || ''; }
+  function basename(p) { return (p || '').replace(/[\\\/]$/, '').split(/[\\\/]/).pop() || p || ''; }
   function toast(text) {
     const el = document.createElement('div'); el.className = 'toast'; el.textContent = text; els.toasts.appendChild(el);
     setTimeout(() => el.remove(), 3600);
@@ -214,7 +214,7 @@
       if (['queued','running'].includes(j.state)) {
         const b = document.createElement('button'); b.textContent = 'Отменить'; b.onclick = () => cancelJob(j.id); actions.appendChild(b);
       } else if (j.outputs?.length || j.download_dir) {
-        const b = document.createElement('button'); b.textContent = 'В Finder'; b.onclick = () => revealJob(j.id); actions.appendChild(b);
+        const b = document.createElement('button'); b.textContent = 'Показать файл'; b.onclick = () => revealJob(j.id); actions.appendChild(b);
       }
       if (j.error) { const e = document.createElement('div'); e.className = 'error-copy'; e.textContent = j.error; card.appendChild(e); }
       els.jobs.appendChild(card);
@@ -254,7 +254,7 @@
   els.inspect.addEventListener('click', () => inspectUrl(true));
   els.paste.addEventListener('click', async () => {
     try { els.url.value = await navigator.clipboard.readText(); scheduleInspect(); }
-    catch (_) { els.url.focus(); toast('Вставьте ссылку сочетанием ⌘V'); }
+    catch (_) { els.url.focus(); toast('Вставьте ссылку стандартным сочетанием вставки'); }
   });
   els.download.addEventListener('click', startDownload);
   els.chooseFolder.addEventListener('click', async () => {

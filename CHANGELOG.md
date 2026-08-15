@@ -1,5 +1,17 @@
 # 🗒️ Changelog
 
+## 1.4.0 — 2026-08-15
+
+- LocalTube переведён с macOS-only на единый backend для macOS, Linux и Windows;
+- добавлены Linux installer без `sudo`, user `systemd` service/fallback launcher и desktop entry;
+- добавлены Windows installer/controls без admin, Start Menu shortcut и приватный runtime в `%LOCALAPPDATA%`;
+- runtime bootstrap выбирает Deno, yt-dlp и FFmpeg/FFprobe по ОС и архитектуре и проверяет контрольные суммы;
+- backend получил платформенные пути, `.exe`, выбор папки/cookies, открытие результата, disk info и завершение process tree;
+- интерфейс очищен от macOS-only терминов (`Finder`, `⌘V`, «этот Mac»);
+- release builder формирует macOS ZIP, Linux tar.gz и Windows ZIP с `.sha256` и внутренним manifest;
+- CI расширен реальными Linux/Windows/macOS integration jobs;
+- README, SECURITY, THIRD_PARTY, AUDIT и release-документация приведены к общей модели.
+
 ## 1.3.0 — 2026-08-15
 
 - штатная установка перенесена в нативный universal `Install LocalTube.app`, не зависящий от Terminal/zsh/.zshrc;

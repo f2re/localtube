@@ -89,7 +89,7 @@
             <div class="field-group hidden" id="audioFormatGroup">
               <label for="audioFormat">Формат аудио</label>
               <select id="audioFormat">
-                <option value="m4a" selected>M4A — для Apple</option>
+                <option value="m4a" selected>M4A — совместимый</option>
                 <option value="mp3">MP3 — универсальный</option>
                 <option value="opus">Opus — качество/размер</option>
                 <option value="flac">FLAC — без потерь*</option>
@@ -150,7 +150,7 @@
               <label class="toggle-row"><span><strong>Плейлист целиком</strong><small>По умолчанию скачивается только открытое видео.</small></span><input id="playlistToggle" type="checkbox"><i></i></label>
               <label class="toggle-row"><span><strong>Встроить метаданные</strong><small>Название, автор и обложка для аудиофайлов.</small></span><input id="metadataToggle" type="checkbox" checked><i></i></label>
               <div class="maintenance-row">
-                <div><strong>Диагностика и совместимость</strong><small>Проверка YouTube ничего не скачивает. Обновление загрузчика не требует Terminal или zsh.</small></div>
+                <div><strong>Диагностика и совместимость</strong><small>Проверка YouTube ничего не скачивает. Обновление загрузчика работает локально на текущей ОС.</small></div>
                 <div class="maintenance-actions">
                   <button class="secondary-btn" id="diagnoseBtn" type="button">Проверить</button>
                   <button class="secondary-btn" id="updateYtdlpBtn" type="button">Обновить загрузчик</button>
@@ -183,7 +183,7 @@
     </main>
 
     <footer>
-      <span>Работает только на этом Mac · 127.0.0.1</span>
+      <span>Работает только на этом компьютере · 127.0.0.1</span>
       <span id="versionText"></span>
     </footer>
   </div>
