@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply version, installer, docs and Intel CI changes
+      - name: Apply version, installer and docs changes
         shell: bash
         run: |
           python3 - <<'PY'
@@ -41,7 +41,7 @@ jobs:
           changelog = Path('CHANGELOG.md')
           text = changelog.read_text(encoding='utf-8')
           marker = '# 🗒️ Changelog\n\n'
-          section = '''## 1.4.1 — 2026-08-15\n\n- bootstrap macOS/Linux больше не зависит от единственной TLS-сессии к GitHub CDN: curl пробует обычный режим, HTTP/1.1, IPv4 и TLS 1.2, затем доступные альтернативные транспорты;\n- успешно проверенные Deno, yt-dlp, FFmpeg и FFprobe сразу сохраняются в persistent SHA-256 cache и переиспользуются после частично неудачной установки;\n- при сетевой ошибке installer умеет переиспользовать рабочий runtime уже установленной версии LocalTube, не останавливая сервис до завершения preflight;\n- для Deno добавлен официальный альтернативный маршрут через `dl.deno.land`;\n- добавлены regression-тесты, воспроизводящие `curl (35) LibreSSL SSL_ERROR_SYSCALL`, полный offline-cache fallback и reuse предыдущего runtime;\n- CI дополнен Intel macOS runner (`macos-15-intel`) для проверки x86_64 runtime и bootstrap.\n\n'''
+          section = '''## 1.4.1 — 2026-08-15\n\n- bootstrap macOS/Linux больше не зависит от единственной TLS-сессии к GitHub CDN: curl пробует обычный режим, HTTP/1.1, IPv4 и TLS 1.2, затем доступные альтернативные транспорты;\n- успешно проверенные Deno, yt-dlp, FFmpeg и FFprobe сразу сохраняются в persistent SHA-256 cache и переиспользуются после частично неудачной установки;\n- при сетевой ошибке installer умеет переиспользовать рабочий runtime уже установленной версии LocalTube, не останавливая сервис до завершения preflight;\n- для Deno добавлен официальный альтернативный маршрут через `dl.deno.land`;\n- добавлены regression-тесты, воспроизводящие `curl (35) LibreSSL SSL_ERROR_SYSCALL`, полный offline-cache fallback и reuse предыдущего runtime;\n- CI дополнен Intel macOS runner для проверки x86_64 runtime и bootstrap.\n\n'''
           if '## 1.4.1 — 2026-08-15' not in text:
               if marker not in text:
                   raise SystemExit('CHANGELOG marker not found')
@@ -50,20 +50,13 @@ jobs:
           readme = Path('README.md')
           text = readme.read_text(encoding='utf-8')
           anchor = 'Скачанные компоненты проходят SHA-256-проверку там, где upstream публикует контрольные суммы. Активные версии и происхождение компонентов записываются в `runtime/manifest.json`.\n'
-          extra = '''\n### Устойчивость bootstrap к сетевым сбоям\n\nУстановщик не считает кратковременный сбой GitHub CDN фатальным с первой попытки. Для HTTPS-загрузок последовательно используются повторные попытки `curl`, HTTP/1.1, IPv4 и ограничение TLS 1.2; если на машине уже есть другой download transport, он также может быть использован как fallback. Deno дополнительно может быть получен с официального `dl.deno.land`.\n\nПосле успешной SHA-256-проверки каждый runtime-компонент сразу сохраняется в пользовательский verified cache. Поэтому если, например, Deno уже скачался, а сеть оборвалась на yt-dlp, следующая установка **не обязана скачивать Deno заново**. При обновлении также может быть переиспользован текущий рабочий runtime. На macOS кэш находится в `~/Library/Application Support/LocalTube/cache/bootstrap/`, на Linux — внутри `${XDG_DATA_HOME:-~/.local/share}/localtube/cache/bootstrap/`.\n'''
+          extra = '''\n### Устойчивость bootstrap к сетевым сбоям\n\nУстановщик не считает кратковременный сбой GitHub CDN фатальным с первой попытки. Для HTTPS-загрузок последовательно используются повторные попытки `curl`, HTTP/1.1, IPv4 и ограничение TLS 1.2; если на машине уже есть другой download transport, он также может быть использован как fallback. Deno дополнительно может быть получен с официального `dl.deno.land`.\n\nПосле успешной SHA-256-проверки каждый runtime-компонент сразу сохраняется в пользовательский verified cache. Поэтому если, например, Deno уже скачался, а сеть оборвалась на yt-dlp, следующая установка **не обязана скачивать Deno заново**. При обновлении также может быть переиспользован текущий рабочий runtime. На macOS кэш находится внутри `~/Library/Application Support/LocalTube/cache/bootstrap/`, на Linux — внутри `${XDG_DATA_HOME:-~/.local/share}/localtube/cache/bootstrap/`.\n'''
           if '### Устойчивость bootstrap к сетевым сбоям' not in text:
               if anchor not in text:
                   raise SystemExit('README runtime anchor not found')
               readme.write_text(text.replace(anchor, anchor + extra, 1), encoding='utf-8')
-
-          ci = Path('.github/workflows/ci.yml')
-          text = ci.read_text(encoding='utf-8')
-          if 'macos-intel-integration:' not in text:
-              text += '''\n  macos-intel-integration:\n    name: macOS Intel runtime + resilient bootstrap\n    runs-on: macos-15-intel\n    timeout-minutes: 20\n    steps:\n      - uses: actions/checkout@v4\n      - name: TLS/cache regression on Intel\n        shell: bash\n        run: ./scripts/test_bootstrap_resilience.sh\n      - name: Real Intel macOS runtime integration\n        shell: bash\n        run: ./scripts/ci_macos_integration.sh\n'''
-              ci.write_text(text, encoding='utf-8')
           PY
           chmod +x scripts/test_bootstrap_resilience.sh
-          git rm .github/workflows/apply-resilient-bootstrap.yml
           git diff --check
       - name: Commit final patch
         shell: bash
