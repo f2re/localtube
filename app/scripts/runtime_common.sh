@@ -90,30 +90,31 @@ PY
 
 lt_download_common() {
   local _lt_url _lt_dst _lt_label _lt_effective_file _lt_curl _lt_part _lt_efftmp
-  local _lt_retry_all _lt_mode _lt_wget _lt_aria _lt_dir _lt_name
+  local _lt_retry_all _lt_mode _lt_wget _lt_aria _lt_dir _lt_name _lt_rc
   _lt_url="$1"; _lt_dst="$2"; _lt_label="$3"; _lt_effective_file="${4:-}"
   _lt_part="$_lt_dst.part.$$"
   _lt_efftmp="${_lt_effective_file:+$_lt_effective_file.part.$$}"
   rm -f "$_lt_part" ${_lt_efftmp:+"$_lt_efftmp"}
   lt_log "  -> $_lt_label"
 
-  _lt_curl="$(lt_cmd curl 2>/dev/null)"
+  _lt_curl="$(lt_cmd curl 2>/dev/null || true)"
   if [ -n "$_lt_curl" ]; then
     _lt_retry_all=''
     if lt_curl_has "$_lt_curl" '--retry-all-errors'; then _lt_retry_all='--retry-all-errors'; fi
     for _lt_mode in normal http1 ipv4 tls12; do
       rm -f "$_lt_part" ${_lt_efftmp:+"$_lt_efftmp"}
+      _lt_rc=1
       if [ -n "$_lt_effective_file" ]; then
         case "$_lt_mode" in
           normal)
-            "$_lt_curl" --fail --location --silent --show-error --retry 4 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp" ;;
+            if "$_lt_curl" --fail --location --silent --show-error --retry 4 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp"; then _lt_rc=0; else _lt_rc=$?; fi ;;
           http1)
-            "$_lt_curl" --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp" ;;
+            if "$_lt_curl" --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp"; then _lt_rc=0; else _lt_rc=$?; fi ;;
           ipv4)
-            "$_lt_curl" --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 --ipv4 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp" ;;
+            if "$_lt_curl" --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 --ipv4 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp"; then _lt_rc=0; else _lt_rc=$?; fi ;;
           tls12)
             if lt_curl_has "$_lt_curl" '--tls-max'; then
-              "$_lt_curl" --fail --location --silent --show-error --retry 2 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --tls-max 1.2 --http1.1 --ipv4 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp"
+              if "$_lt_curl" --fail --location --silent --show-error --retry 2 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --tls-max 1.2 --http1.1 --ipv4 --write-out '%{url_effective}' "$_lt_url" --output "$_lt_part" > "$_lt_efftmp"; then _lt_rc=0; else _lt_rc=$?; fi
             else
               continue
             fi ;;
@@ -121,26 +122,26 @@ lt_download_common() {
       else
         case "$_lt_mode" in
           normal)
-            "$_lt_curl" --fail --location --silent --show-error --retry 4 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 "$_lt_url" --output "$_lt_part" ;;
+            if "$_lt_curl" --fail --location --silent --show-error --retry 4 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 "$_lt_url" --output "$_lt_part"; then _lt_rc=0; else _lt_rc=$?; fi ;;
           http1)
-            "$_lt_curl" --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 "$_lt_url" --output "$_lt_part" ;;
+            if "$_lt_curl" --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 "$_lt_url" --output "$_lt_part"; then _lt_rc=0; else _lt_rc=$?; fi ;;
           ipv4)
-            "$_lt_curl" --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 --ipv4 "$_lt_url" --output "$_lt_part" ;;
+            if "$_lt_curl" --fail --location --silent --show-error --retry 3 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --http1.1 --ipv4 "$_lt_url" --output "$_lt_part"; then _lt_rc=0; else _lt_rc=$?; fi ;;
           tls12)
             if lt_curl_has "$_lt_curl" '--tls-max'; then
-              "$_lt_curl" --fail --location --silent --show-error --retry 2 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --tls-max 1.2 --http1.1 --ipv4 "$_lt_url" --output "$_lt_part"
+              if "$_lt_curl" --fail --location --silent --show-error --retry 2 --retry-delay 2 $_lt_retry_all --connect-timeout 20 --max-time 1200 --proto '=https' --proto-redir '=https' --tlsv1.2 --tls-max 1.2 --http1.1 --ipv4 "$_lt_url" --output "$_lt_part"; then _lt_rc=0; else _lt_rc=$?; fi
             else
               continue
             fi ;;
         esac
       fi
-      if [ $? -eq 0 ] && [ -s "$_lt_part" ]; then
+      if [ "$_lt_rc" -eq 0 ] && [ -s "$_lt_part" ]; then
         mv -f "$_lt_part" "$_lt_dst" || return 1
         if [ -n "$_lt_effective_file" ]; then mv -f "$_lt_efftmp" "$_lt_effective_file" || return 1; fi
         [ "$_lt_mode" = normal ] || lt_log "     transport fallback: curl $_lt_mode OK"
         return 0
       fi
-      lt_warn "download transport failed ($_lt_mode); retrying with another TLS/network path"
+      lt_warn "download transport failed ($_lt_mode, curl exit $_lt_rc); retrying with another TLS/network path"
     done
   fi
 
@@ -152,11 +153,10 @@ lt_download_common() {
     return 0
   fi
 
-  _lt_wget="$(lt_cmd wget 2>/dev/null)"
+  _lt_wget="$(lt_cmd wget 2>/dev/null || true)"
   if [ -n "$_lt_wget" ]; then
     rm -f "$_lt_part"
-    "$_lt_wget" -O "$_lt_part" "$_lt_url" >/dev/null 2>&1
-    if [ $? -eq 0 ] && [ -s "$_lt_part" ]; then
+    if "$_lt_wget" -O "$_lt_part" "$_lt_url" >/dev/null 2>&1 && [ -s "$_lt_part" ]; then
       mv -f "$_lt_part" "$_lt_dst" || return 1
       if [ -n "$_lt_effective_file" ]; then printf '%s' "$_lt_url" > "$_lt_effective_file"; fi
       lt_log '     transport fallback: wget OK'
@@ -164,12 +164,11 @@ lt_download_common() {
     fi
   fi
 
-  _lt_aria="$(lt_cmd aria2c 2>/dev/null)"
+  _lt_aria="$(lt_cmd aria2c 2>/dev/null || true)"
   if [ -n "$_lt_aria" ]; then
     _lt_dir="$(dirname "$_lt_dst")"; _lt_name="$(basename "$_lt_dst")"
     rm -f "$_lt_dst"
-    "$_lt_aria" --allow-overwrite=true --auto-file-renaming=false --check-certificate=true --max-tries=4 --retry-wait=2 --dir="$_lt_dir" --out="$_lt_name" "$_lt_url" >/dev/null 2>&1
-    if [ $? -eq 0 ] && [ -s "$_lt_dst" ]; then
+    if "$_lt_aria" --allow-overwrite=true --auto-file-renaming=false --check-certificate=true --max-tries=4 --retry-wait=2 --dir="$_lt_dir" --out="$_lt_name" "$_lt_url" >/dev/null 2>&1 && [ -s "$_lt_dst" ]; then
       if [ -n "$_lt_effective_file" ]; then printf '%s' "$_lt_url" > "$_lt_effective_file"; fi
       lt_log '     transport fallback: aria2c OK'
       return 0
@@ -179,7 +178,6 @@ lt_download_common() {
   rm -f "$_lt_part" ${_lt_efftmp:+"$_lt_efftmp"}
   return 1
 }
-
 lt_download() { lt_download_common "$1" "$2" "$3" ''; }
 lt_download_effective() { lt_download_common "$1" "$2" "$3" "$4"; }
 
@@ -298,7 +296,7 @@ lt_cache_restore() {
 lt_find_external() {
   local _lt_tool _lt_found _lt_candidate
   _lt_tool="$1"
-  _lt_found="$(command -v "$_lt_tool" 2>/dev/null)"
+  _lt_found="$(command -v "$_lt_tool" 2>/dev/null || true)"
   if [ -n "$_lt_found" ] && [ -x "$_lt_found" ]; then printf '%s\n' "$_lt_found"; return 0; fi
   for _lt_candidate in \
     "/opt/homebrew/bin/$_lt_tool" "/usr/local/bin/$_lt_tool" "/opt/local/bin/$_lt_tool" \
