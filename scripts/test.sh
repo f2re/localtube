@@ -14,6 +14,9 @@ node --check app/static/app.js
 echo '[3/11] Bash 3.2 compatibility'
 python3 scripts/check_shell_compat.py
 
+echo '[health] startup readiness race regression'
+python3 scripts/check_health_startup.py
+
 echo '[4/11] Unix runtime destination guard'
 _tmp_runtime_test="$(mktemp -d)"
 (

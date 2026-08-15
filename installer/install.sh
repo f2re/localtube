@@ -1,5 +1,5 @@
 #!/bin/bash
-# LocalTube 1.4.1 macOS installer.
+# LocalTube 1.4.2 macOS installer.
 # Runs with a deterministic environment and does not source zsh/bash profiles.
 # Compatible with Apple's /bin/bash 3.2.
 set -u
@@ -168,19 +168,39 @@ PLIST
   /bin/mv -f "$_tmp" "$PLIST"
 }
 
+LAST_HEALTH_JSON=''
 health() {
   _port="$(/bin/cat "$DATA/port" 2>/dev/null | /usr/bin/tr -cd '0-9')"
   _token="$(/bin/cat "$DATA/api_token" 2>/dev/null | /usr/bin/tr -d '\r\n')"
   valid_port "$_port" || return 1
   [ -n "$_token" ] || return 1
-  /usr/bin/curl --fail --silent --show-error --max-time 3 \
-    -H "X-LocalTube-Token: $_token" "http://127.0.0.1:$_port/api/health" 2>/dev/null | /usr/bin/grep -q '"ok":true'
+  _health_json="$(/usr/bin/curl --fail --silent --show-error --max-time 12 \
+    -H "X-LocalTube-Token: $_token" "http://127.0.0.1:$_port/api/health?refresh=1" 2>/dev/null)" || return 1
+  [ -n "$_health_json" ] && LAST_HEALTH_JSON="$_health_json"
+  printf '%s' "$_health_json" | /usr/bin/grep -q '"ok":true' || return 1
+  printf '%s' "$_health_json" | /usr/bin/grep -q '"ready":true'
 }
 
 wait_health() {
   _i=0
-  while [ "$_i" -lt 35 ]; do health && return 0; /bin/sleep 1; _i=$((_i + 1)); done
+  while [ "$_i" -lt 75 ]; do
+    health && return 0
+    /bin/sleep 1
+    _i=$((_i + 1))
+  done
   return 1
+}
+
+print_health_diagnostics() {
+  say '--- runtime health ---'
+  if [ -n "$LAST_HEALTH_JSON" ]; then printf '%s\n' "$LAST_HEALTH_JSON"; else say '(health endpoint не вернул JSON)'; fi
+  say '--- launchd state ---'
+  /bin/launchctl print "$DOMAIN/$LABEL" 2>&1 | /usr/bin/tail -n 80 || true
+  say '--- direct runtime checks ---'
+  if [ -x "$RUNTIME/deno" ]; then "$RUNTIME/deno" --version 2>&1 | /usr/bin/head -n 3 || true; else say 'deno: missing'; fi
+  if [ -x "$RUNTIME/yt-dlp" ]; then "$RUNTIME/yt-dlp" --version 2>&1 | /usr/bin/head -n 3 || true; else say 'yt-dlp: missing'; fi
+  if [ -x "$RUNTIME/ffmpeg" ]; then "$RUNTIME/ffmpeg" -version 2>&1 | /usr/bin/head -n 3 || true; else say 'ffmpeg: missing'; fi
+  if [ -x "$RUNTIME/ffprobe" ]; then "$RUNTIME/ffprobe" -version 2>&1 | /usr/bin/head -n 3 || true; else say 'ffprobe: missing'; fi
 }
 
 active_downloads() {
@@ -267,7 +287,7 @@ on_signal() {
 trap cleanup EXIT
 trap on_signal HUP INT TERM
 
-say 'LocalTube 1.4.1 — production installer'
+say 'LocalTube 1.4.2 — production installer'
 say '======================================'
 is_macos || fail 'Этот пакет предназначен только для macOS.'
 
@@ -406,15 +426,16 @@ fi
 /bin/launchctl enable "$DOMAIN/$LABEL" >/dev/null 2>&1 || true
 /bin/launchctl kickstart -k "$DOMAIN/$LABEL" >/dev/null 2>&1 || true
 
-say '[7/8] Проверяю authenticated HTTP health-check…'
+say '[7/8] Проверяю authenticated HTTP health-check и готовность runtime…'
 gui_notify 'Запускаю локальный сервис и проверяю его состояние…'
 if ! wait_health; then
-  if [ -f "$LOGS/stderr.log" ]; then say '--- последние строки stderr ---'; /usr/bin/tail -n 40 "$LOGS/stderr.log" >&2 || true; fi
-  fail 'LocalTube не ответил за 35 секунд.'
+  print_health_diagnostics
+  if [ -f "$LOGS/stderr.log" ]; then say '--- последние строки stderr ---'; /usr/bin/tail -n 80 "$LOGS/stderr.log" >&2 || true; fi
+  fail 'LocalTube не вышел в состояние runtime.ready=true за 75 секунд. Диагностика напечатана выше; предыдущая версия восстановлена.'
 fi
 TOKEN="$(/bin/cat "$DATA/api_token" 2>/dev/null | /usr/bin/tr -d '\r\n')"
-HEALTH_JSON="$(/usr/bin/curl --fail --silent --max-time 5 -H "X-LocalTube-Token: $TOKEN" "http://127.0.0.1:$PORT/api/health" 2>/dev/null)" || fail 'Контрольный health-check завершился ошибкой.'
-printf '%s' "$HEALTH_JSON" | /usr/bin/grep -q '"ready":true' || fail 'Сервис запущен, но автономное окружение не готово.'
+HEALTH_JSON="$LAST_HEALTH_JSON"
+say '      runtime: ready'
 
 say '[8/8] Проверяю интеграцию yt-dlp + Deno с YouTube (без скачивания видео)…'
 DIAG_JSON="$(/usr/bin/curl --fail --silent --max-time 75 -H 'Content-Type: application/json' -H "X-LocalTube-Token: $TOKEN" -X POST --data '{}' "http://127.0.0.1:$PORT/api/diagnostics" 2>/dev/null || true)"

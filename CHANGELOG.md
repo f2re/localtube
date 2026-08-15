@@ -1,5 +1,14 @@
 # 🗒️ Changelog
 
+## 1.4.2 — 2026-08-15
+
+- исправлена гонка macOS LaunchAgent startup: installer больше не принимает `ok:true` за готовность и ждёт именно `runtime.ready:true`;
+- отрицательный runtime status больше не кэшируется на 30 секунд — transient cold-start повторно проверяется через 1 секунду;
+- `/api/health?refresh=1` принудительно перепроверяет yt-dlp/FFmpeg/FFprobe во время установки;
+- окно запуска увеличено до 75 секунд для старых Intel Mac и первого запуска бинарников после установки;
+- при реальном сбое installer печатает health JSON, состояние launchd, прямые версии Deno/yt-dlp/FFmpeg/FFprobe и stderr до rollback;
+- добавлен regression guard против возврата one-shot health-check из 1.4.1.
+
 ## 1.4.1 — 2026-08-15
 
 - bootstrap macOS/Linux больше не зависит от единственной TLS-сессии к GitHub CDN: curl пробует обычный режим, HTTP/1.1, IPv4 и TLS 1.2, затем доступные альтернативные транспорты;
