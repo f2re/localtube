@@ -10,8 +10,32 @@ echo '[2/8] TypeScript / JavaScript'
 tsc --noEmit --target ES2022 --lib ES2022,DOM --skipLibCheck app/server.ts
 node --check app/static/app.js
 
-echo '[3/8] bash-3.2 guard'
+echo '[3/8] bash-3.2 + nested runtime path guard'
 python3 scripts/check_shell_compat.py
+_tmp_runtime_test="$(mktemp -d)"
+(
+  set -e
+  . app/scripts/runtime_common.sh
+  # Exercise the production orchestration while replacing network/executable checks only.
+  # This catches Bash dynamic-scope regressions where a child function overwrites the
+  # caller's runtime destination (the bug that produced runtime/deno/yt-dlp).
+  lt_arch() { printf '%s\n' arm64; }
+  lt_mktemp_dir() { /bin/mkdir -p "$_tmp_runtime_test/tmp"; printf '%s\n' "$_tmp_runtime_test/tmp"; }
+  lt_download() { : > "$2"; }
+  lt_download_effective() { : > "$2"; printf '%s\n' "https://ffmpeg.martin-riedl.de/download/macos/arm64/test/$(basename "$2")" > "$4"; }
+  lt_verify_sha_file() { return 0; }
+  lt_verify_ytdlp() { return 0; }
+  lt_extract_named() { /bin/mkdir -p "$(dirname "$3")"; printf '#!/bin/sh\nexit 0\n' > "$3"; /bin/chmod 755 "$3"; }
+  lt_check_exec() { return 0; }
+  lt_check_deno_version() { return 0; }
+  lt_runtime_manifest() { return 0; }
+  lt_install_runtime "$_tmp_runtime_test/runtime"
+  for f in deno yt-dlp ffmpeg ffprobe; do
+    test -f "$_tmp_runtime_test/runtime/$f" || { echo "runtime path regression: $f" >&2; exit 1; }
+  done
+  test ! -e "$_tmp_runtime_test/runtime/deno/yt-dlp"
+)
+rm -rf "$_tmp_runtime_test"
 
 echo '[4/8] native cross-build + bootstrap package'
 python3 scripts/build_release.py >/tmp/localtube-build.txt
