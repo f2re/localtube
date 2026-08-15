@@ -1,7 +1,7 @@
 #!/bin/bash
 # LocalTube runtime bootstrap for macOS and Linux.
 # Bash 3.2 compatible; does not source interactive shell profiles.
-set +e
+# This file is sourced by installers/tests and must preserve the caller's shell options.
 
 LT_SOURCE_DENO='unknown'
 LT_SOURCE_YTDLP='unknown'
