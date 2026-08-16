@@ -41,6 +41,6 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add . ':!.github/workflows/apply-1-4-4.yml' ':!scripts/apply_1_4_4_patch.py'
+          git add . ':!.github/workflows/**' ':!scripts/apply_1_4_4_patch.py'
           git commit -m 'fix: truthful progress and Windows installer (1.4.4)'
           git push origin HEAD:fix/progress-windows-installer-1.4.4
