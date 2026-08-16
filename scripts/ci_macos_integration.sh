@@ -97,14 +97,27 @@ if [ "$LIVE_YOUTUBE" -eq 0 ]; then
 set -eu
 if [ "${1:-}" = "--version" ]; then printf '%s\n' 'LocalTube-CI-mock'; exit 0; fi
 OUTDIR="$PWD"
+TMPDIR="$PWD"
 while [ "$#" -gt 0 ]; do
-  if [ "$1" = "--paths" ] && [ "$#" -ge 2 ]; then OUTDIR="$2"; shift 2; continue; fi
+  if [ "$1" = "--paths" ] && [ "$#" -ge 2 ]; then
+    case "$2" in
+      temp:*) TMPDIR=${2#temp:} ;;
+      *) OUTDIR=$2 ;;
+    esac
+    shift 2
+    continue
+  fi
   shift
 done
+/bin/mkdir -p "$OUTDIR" "$TMPDIR"
 FFMPEG="$(dirname "$0")/ffmpeg"
+TMP="$TMPDIR/LocalTube CI synthetic [localtube-ci].mp4"
 OUT="$OUTDIR/LocalTube CI synthetic [localtube-ci].mp4"
-"$FFMPEG" -hide_banner -loglevel error -y -f lavfi -i 'color=c=black:s=320x180:d=1' -f lavfi -i 'anullsrc=r=44100:cl=stereo' -t 1 -c:v mpeg4 -c:a aac "$OUT"
-printf '__LOCALTUBE_PROGRESS__:100.0%%\tlocal\t00:00\n'
+"$FFMPEG" -hide_banner -loglevel error -y -f lavfi -i 'color=c=black:s=320x180:d=1' -f lavfi -i 'anullsrc=r=44100:cl=stereo' -t 1 -c:v mpeg4 -c:a aac "$TMP"
+SIZE=$(/usr/bin/stat -f %z "$TMP")
+printf '__LOCALTUBE_PROGRESS__:downloading\tlocal\t%s\t%s\tNA\t1048576\t0\tNA\tNA\t%s\n' "$SIZE" "$SIZE" "$TMP"
+printf '__LOCALTUBE_POSTPROCESS__:started\n'
+/bin/mv "$TMP" "$OUT"
 printf '__LOCALTUBE_FINAL__:%s\n' "$OUT"
 MOCK
   /bin/chmod 755 "$RUNTIME/yt-dlp"
@@ -127,12 +140,19 @@ while [ "$I" -lt 180 ]; do
   I=$((I + 1))
 done
 [ "$STATE" = completed ] || { echo "download timeout: $STATE"; exit 23; }
-OUTPUT="$(/usr/bin/find "$DOWNLOADS" -type f ! -name '*.part' -size +1k -print -quit)"
+OUTPUT="$(/usr/bin/find "$DOWNLOADS" -maxdepth 1 -type f -size +1k -print -quit)"
 [ -n "$OUTPUT" ] || { echo 'No completed output file'; exit 24; }
+if [ -d "$DOWNLOADS/.localtube-tmp" ] && /usr/bin/find "$DOWNLOADS/.localtube-tmp" -mindepth 1 -print -quit | /usr/bin/grep -q .; then
+  echo 'Per-job temporary files were not cleaned up' >&2
+  /usr/bin/find "$DOWNLOADS/.localtube-tmp" -print >&2
+  exit 25
+fi
+FINAL_SIZE="$(printf '%s' "$JOBS" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("jobs") or [{}])[0].get("final_size_bytes",0))')"
+[ "$FINAL_SIZE" -gt 1024 ] || { printf '%s\n' "$JOBS"; echo 'Final size was not recorded' >&2; exit 26; }
 "$RUNTIME/ffprobe" -v error -show_entries format=duration -of default=nw=1:nk=1 "$OUTPUT" >/dev/null
 if [ "$LIVE_YOUTUBE" -eq 1 ]; then
   echo '[macOS 7/7] real YouTube download verified'
 else
-  echo '[macOS 7/7] deterministic queue + FFmpeg output verified; live YouTube probe was CI-IP blocked'
+  echo '[macOS 7/7] deterministic queue + temp cleanup + FFmpeg output verified; live YouTube probe was CI-IP blocked'
 fi
 echo 'macOS full integration: OK'
