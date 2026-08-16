@@ -9,6 +9,7 @@ errors=[]
 for needle in ['progress.downloaded_bytes','progress.total_bytes_estimate','postprocess:__LOCALTUBE_POSTPROCESS__','.localtube-tmp','final_size_bytes','await cleanupJobTemp(j)']:
     if needle not in server: errors.append(f'server missing {needle}')
 if 'progress._percent_str' in server: errors.append('server still parses decorative _percent_str')
+if 'videoArgs.includes(expectedTempArg)' not in server: errors.append('backend self-test must validate the computed platform temp path')
 for needle in ['j.total_bytes','j.final_size_bytes','postprocessing']:
     if needle not in ui: errors.append(f'UI missing {needle}')
 if '.job.postprocessing .progress-bar' not in css: errors.append('indeterminate postprocess CSS missing')

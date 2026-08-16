@@ -982,7 +982,8 @@ if (Deno.args.includes('--self-test')) {
     const commandOk = videoArgs.includes('[height<=?1080]') || videoArgs.some((v) => v.includes('[height<=?1080]'));
     const mp4CompatibilityOk = videoArgs.some((v) => v.includes('[vcodec^=avc]')) && videoArgs.some((v) => v.includes('[acodec^=mp4a]'));
     const denoRuntimeOk = videoArgs.includes(`deno:${DENO_BIN}`) && videoArgs.includes('ejs:github');
-    const progressPipelineOk = videoArgs.some((v) => v.includes('progress.downloaded_bytes')) && videoArgs.some((v) => v.includes('postprocess:__LOCALTUBE_POSTPROCESS__')) && videoArgs.some((v) => v.includes('temp:') && v.includes('.localtube-tmp'));
+    const expectedTempArg = `temp:${jobTempDir({ id: 'selftest-video', settings: testSettings })}`;
+    const progressPipelineOk = videoArgs.some((v) => v.includes('progress.downloaded_bytes')) && videoArgs.some((v) => v.includes('postprocess:__LOCALTUBE_POSTPROCESS__')) && videoArgs.includes(expectedTempArg);
     const audioOk = audioArgs.includes('--extract-audio') && audioArgs.includes('--audio-format');
     const urlValidationOk = youtubeUrlOk(TEST_VIDEO_URL) && youtubeUrlOk(`https://youtu.be/${TEST_VIDEO_ID}`) &&
       youtubeUrlOk(`https://www.youtube.com/shorts/${TEST_VIDEO_ID}`) && youtubeUrlOk('https://www.youtube.com/playlist?list=PL123') &&

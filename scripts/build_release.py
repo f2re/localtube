@@ -288,7 +288,7 @@ def build_windows() -> Path:
 
 1. Распакуйте ZIP в обычную папку.
 2. Дважды щёлкните INSTALL.cmd (рекомендуется).
-   Альтернатива: powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1
+   Альтернатива: powershell -NoProfile -ExecutionPolicy Bypass -File .\\INSTALL.ps1
 3. После установки используйте LocalTube из меню Пуск.
 
 Установка выполняется в %LOCALAPPDATA%/LocalTube без прав администратора.
