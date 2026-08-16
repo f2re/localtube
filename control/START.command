@@ -2,6 +2,7 @@
 BASE="$HOME/Library/Application Support/LocalTube"
 LABEL='com.localtube.service'; UID_NUM=$(/usr/bin/id -u); DOMAIN="gui/$UID_NUM"; PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 PORT=$(/bin/cat "$BASE/data/port" 2>/dev/null | /usr/bin/tr -cd '0-9'); [ -n "$PORT" ] || PORT=8765
+/bin/launchctl enable "$DOMAIN/$LABEL" >/dev/null 2>&1 || true
 /bin/launchctl kickstart -k "$DOMAIN/$LABEL" >/dev/null 2>&1 || { /bin/launchctl bootstrap "$DOMAIN" "$PLIST" >/dev/null 2>&1 || true; /bin/launchctl kickstart -k "$DOMAIN/$LABEL" >/dev/null 2>&1 || true; }
 I=0
 while [ "$I" -lt 15 ]; do

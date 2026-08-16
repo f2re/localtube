@@ -27,6 +27,8 @@ LocalTube превращает `yt-dlp + FFmpeg + Deno` в обычное лок
 - 📦 MP4, MKV или исходный контейнер; для MP4 приоритет H.264/AAC без обязательного перекодирования;
 - 🎧 M4A, MP3, Opus, FLAC или исходный аудиопоток;
 - 📚 плейлисты, очередь, прогресс, скорость, ETA, отмена и история;
+- 📊 прогресс считается по реальным байтам; оценочный размер помечается `≈`, а post-processing показывается отдельной фазой;
+- 🧹 `.part`, отдельные дорожки и FFmpeg `.temp.*` хранятся в скрытом `.localtube-tmp` и удаляются после задачи;
 - 📁 выбор папки и открытие готового файла средствами текущей ОС;
 - 🍪 cookies из браузера или `cookies.txt`, когда YouTube требует авторизацию;
 - 🩺 диагностика `yt-dlp / FFmpeg / Deno / YouTube`;
@@ -94,6 +96,32 @@ LocalTube source-checkout layout self-test: OK
 
 Source install намеренно доверяет содержимому текущего Git checkout; `MANIFEST.sha256` относится к собранным release-архивам. Скачиваемые Deno/yt-dlp/FFmpeg при этом проверяются теми же upstream SHA-256, что и при обычной release-установке.
 
+### Остановка LocalTube на macOS
+
+Остановить сервис **сейчас**, не удаляя программу:
+
+```bash
+"$HOME/Applications/LocalTube Tools/STOP.command"
+```
+
+Или напрямую через launchd:
+
+```bash
+launchctl bootout "gui/$(id -u)/com.localtube.service"
+```
+
+Чтобы одновременно отключить автозапуск при следующем входе в macOS:
+
+```bash
+"$HOME/Applications/LocalTube Tools/STOP.command" --disable
+```
+
+Повторный `START.command` автоматически снова включает LaunchAgent:
+
+```bash
+"$HOME/Applications/LocalTube Tools/START.command"
+```
+
 ### 🐧 Linux
 
 1. Скачайте `LocalTube-Linux-...tar.gz`.
@@ -117,15 +145,29 @@ Source install намеренно доверяет содержимому тек
 
 ### 🪟 Windows
 
-1. Скачайте `LocalTube-Windows-...zip` и распакуйте.
-2. Запустите **`INSTALL.ps1`** через PowerShell.
-3. Если политика Windows блокирует локальный скрипт, из каталога пакета выполните:
+**Что требуется:** Windows 10/11 x64 или ARM64, штатный Windows PowerShell 5.1+ и интернет на первой установке. **Не нужно заранее ставить Python, Node.js, Deno, yt-dlp, FFmpeg, Chocolatey, winget или права администратора** — LocalTube скачивает и проверяет приватный runtime сам. Если корпоративная сеть полностью блокирует GitHub/CDN, допустим fallback на уже установленные `deno`, `yt-dlp`, `ffmpeg` и `ffprobe` из `PATH`.
+
+Готовый Release:
+
+1. Скачайте `LocalTube-Windows-...zip` и **полностью распакуйте** его. Не запускайте installer прямо из окна ZIP.
+2. Дважды щёлкните **`INSTALL.cmd`** — это рекомендуемый вход: он запускает штатный Windows PowerShell с `-NoProfile -ExecutionPolicy Bypass`.
+3. Альтернатива из PowerShell:
    ```powershell
    powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1
    ```
 4. После установки запускайте **LocalTube** из меню «Пуск».
 
-Приложение устанавливается без прав администратора в `%LOCALAPPDATA%\LocalTube`. Runtime и настройки не пишутся в `Program Files` и не требуют системной установки Python/Node.js.
+Установка выполняется в `%LOCALAPPDATA%\LocalTube`, без `Program Files` и без изменения системных runtime. В `%APPDATA%\Microsoft\Windows\Start Menu\Programs` создаётся ярлык LocalTube.
+
+Установка прямо из `git clone` также поддерживается. Из корня репозитория:
+
+```powershell
+.\INSTALL.cmd
+# или
+powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1
+```
+
+Source entrypoint сам создаёт временный production-layout из `app/`, `control/windows/` и `installer/`; Python/Go/Node для установки из исходников не требуются. Только проверка layout без изменений системы: `powershell -NoProfile -ExecutionPolicy Bypass -File .\INSTALL.ps1 -SelfTest`.
 
 ## 🧱 Архитектура
 

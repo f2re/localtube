@@ -6,6 +6,14 @@ if ($SelfTest) {
     Write-Host "LocalTube Windows installer self-test: OK (PowerShell $($PSVersionTable.PSVersion))"
     exit 0
 }
+if ($PSVersionTable.PSVersion.Major -lt 5) { throw 'LocalTube requires Windows PowerShell 5.1 or newer.' }
+if (-not [Environment]::Is64BitOperatingSystem) { throw 'LocalTube requires 64-bit Windows 10/11.' }
+$os = [Environment]::OSVersion.Version
+if ($os.Major -lt 10) { throw "LocalTube requires Windows 10/11; detected $os" }
+Write-Host 'LocalTube 1.4.4 — Windows installer'
+Write-Host '================================='
+Write-Host "Windows: $os"
+Write-Host "PowerShell: $($PSVersionTable.PSVersion)"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (Test-Path -LiteralPath (Join-Path $ScriptDir 'payload\app')) { $PackageRoot = $ScriptDir } else { $PackageRoot = Split-Path -Parent $ScriptDir }
@@ -24,15 +32,8 @@ $Backup = Join-Path $Base ('.rollback-' + [Guid]::NewGuid().ToString('N'))
 
 New-Item -ItemType Directory -Force -Path $Base,$Data,$Logs,$Control,$Stage | Out-Null
 
+$PreviousWasRunning = $false
 $pidFile = Join-Path $Data 'server.pid'
-if (Test-Path -LiteralPath $pidFile) {
-    $raw = (Get-Content -LiteralPath $pidFile -Raw).Trim()
-    $pidNum = 0
-    if ([int]::TryParse($raw, [ref]$pidNum) -and $pidNum -gt 0) {
-        & "$env:SystemRoot\System32\taskkill.exe" /PID $pidNum /T /F 2>$null | Out-Null
-    }
-}
-Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
 
 try {
     Write-Host '[1/5] staging application'
@@ -53,6 +54,16 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Backend self-test failed' }
 
     Write-Host '[4/5] replacing application atomically'
+    # Do not touch an existing installation until the new runtime and backend have passed self-tests.
+    if (Test-Path -LiteralPath $pidFile) {
+        $raw = (Get-Content -LiteralPath $pidFile -Raw).Trim()
+        $pidNum = 0
+        if ([int]::TryParse($raw, [ref]$pidNum) -and $pidNum -gt 0) {
+            try { Get-Process -Id $pidNum -ErrorAction Stop | Out-Null; $PreviousWasRunning = $true } catch {}
+            & "$env:SystemRoot\System32\taskkill.exe" /PID $pidNum /T /F 2>$null | Out-Null
+        }
+    }
+    Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force -Path $Backup | Out-Null
     if (Test-Path -LiteralPath $App) { Move-Item -LiteralPath $App -Destination (Join-Path $Backup 'app') }
     if (Test-Path -LiteralPath $Runtime) { Move-Item -LiteralPath $Runtime -Destination (Join-Path $Backup 'runtime') }
@@ -83,6 +94,9 @@ try {
         Remove-Item -LiteralPath $Runtime -Recurse -Force -ErrorAction SilentlyContinue
         if (Test-Path -LiteralPath (Join-Path $Backup 'app')) { Move-Item -LiteralPath (Join-Path $Backup 'app') -Destination $App }
         if (Test-Path -LiteralPath (Join-Path $Backup 'runtime')) { Move-Item -LiteralPath (Join-Path $Backup 'runtime') -Destination $Runtime }
+    }
+    if ($PreviousWasRunning -and (Test-Path -LiteralPath (Join-Path $Control 'START.ps1'))) {
+        try { & (Join-Path $Control 'START.ps1') } catch { Write-Warning 'Previous LocalTube files were restored, but automatic restart failed.' }
     }
     throw
 } finally {

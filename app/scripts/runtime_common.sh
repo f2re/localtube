@@ -74,7 +74,7 @@ lt_python_download() {
 import ssl, sys, urllib.request
 url, dst, eff = sys.argv[1:4]
 ctx = ssl.create_default_context()
-req = urllib.request.Request(url, headers={"User-Agent": "LocalTube-bootstrap/1.4.3"})
+req = urllib.request.Request(url, headers={"User-Agent": "LocalTube-bootstrap/1.4.4"})
 with urllib.request.urlopen(req, timeout=60, context=ctx) as r, open(dst, "wb") as f:
     while True:
         chunk = r.read(1024 * 1024)

@@ -116,6 +116,8 @@ with zipfile.ZipFile(win_zip) as z:
     names = set(z.namelist())
     required = [
         prefix + 'INSTALL.ps1',
+        prefix + 'INSTALL.cmd',
+        prefix + 'installer/install-windows.ps1',
         prefix + 'MANIFEST.sha256',
         prefix + 'payload/app/server.ts',
         prefix + 'payload/app/scripts/run_server.ps1',

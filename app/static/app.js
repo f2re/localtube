@@ -205,11 +205,18 @@
       card.querySelector('.job-title').textContent = title;
       card.querySelector('.job-badge').textContent = jobLabel(j);
       card.querySelector('.job-state').textContent = stateText(j);
+      const sizeText = j.state === 'completed' && j.final_size_bytes
+        ? fmtBytes(j.final_size_bytes)
+        : j.total_bytes ? `${fmtBytes(j.downloaded_bytes)} / ${j.total_is_estimate ? '≈' : ''}${fmtBytes(j.total_bytes)}`
+        : j.downloaded_bytes ? fmtBytes(j.downloaded_bytes) : '';
       const extra = [j.playlist_item ? `Видео ${j.playlist_item}` : '', j.speed || '', j.eta ? `осталось ${j.eta}` : ''].filter(Boolean).join(' · ');
       card.querySelector('.job-extra').textContent = extra;
+      card.classList.toggle('postprocessing', j.state === 'running' && !!j.postprocessing);
       card.querySelector('.progress-bar').style.width = `${j.state === 'completed' ? 100 : pct}%`;
-      card.querySelector('.progress-left').textContent = j.state === 'running' ? `${Math.round(pct)}%` : stateText(j);
-      card.querySelector('.progress-right').textContent = j.outputs?.length ? basename(j.outputs[j.outputs.length - 1]) : basename(j.download_dir || '');
+      card.querySelector('.progress-left').textContent = j.state === 'running'
+        ? (j.postprocessing ? stateText(j) : `${Math.round(pct)}%${sizeText ? ` · ${sizeText}` : ''}`)
+        : `${stateText(j)}${sizeText ? ` · ${sizeText}` : ''}`;
+      card.querySelector('.progress-right').textContent = j.outputs?.length ? basename(j.outputs[j.outputs.length - 1]) : (j.current_file ? basename(j.current_file) : basename(j.download_dir || ''));
       const actions = card.querySelector('.job-actions');
       if (['queued','running'].includes(j.state)) {
         const b = document.createElement('button'); b.textContent = 'Отменить'; b.onclick = () => cancelJob(j.id); actions.appendChild(b);
