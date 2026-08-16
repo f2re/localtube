@@ -63,11 +63,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: PowerShell syntax + real Windows integration
+      - name: PowerShell syntax + installer layout + real Windows integration
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           $files = @(
+            'INSTALL.ps1',
             'installer/install-windows.ps1',
             'app/scripts/runtime_windows.ps1',
             'app/scripts/run_server.ps1',
@@ -78,6 +79,7 @@ jobs:
             [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file), [ref]$tokens, [ref]$errors)
             if ($errors.Count -gt 0) { $errors | Format-List | Out-String | Write-Error }
           }
+          .\INSTALL.ps1 -SelfTest
           .\scripts\ci_windows_integration.ps1
 
   macos-integration:
@@ -132,6 +134,7 @@ jobs:
           python3 scripts/check_shell_compat.py
           python3 scripts/check_health_startup.py
           python3 scripts/check_loopback_transport.py
+          python3 scripts/check_progress_pipeline.py
           ./scripts/test_bootstrap_resilience.sh
           python3 scripts/build_release.py >/tmp/localtube-intel-build.txt
           python3 scripts/verify_release.py
