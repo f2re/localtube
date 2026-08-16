@@ -278,15 +278,17 @@ def build_windows() -> Path:
     stage = DIST / f'LocalTube-Windows-v{VERSION}'
     stage.mkdir(parents=True)
     common_payload(stage)
-    shutil.copy2(ROOT / 'installer/install-windows.ps1', stage / 'INSTALL.ps1')
-    shutil.copytree(ROOT / 'control/windows', stage / 'control')
+    shutil.copy2(ROOT / 'INSTALL.ps1', stage / 'INSTALL.ps1')
+    shutil.copy2(ROOT / 'INSTALL.cmd', stage / 'INSTALL.cmd')
+    (stage / 'installer').mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / 'installer/install-windows.ps1', stage / 'installer/install-windows.ps1')
+    shutil.copytree(ROOT / 'control/windows', stage / 'control/windows')
     (stage / 'README.txt').write_text(
         f'''LocalTube {VERSION} — Windows
 
 1. Распакуйте ZIP в обычную папку.
-2. Правый клик INSTALL.ps1 → Run with PowerShell.
-   Если PowerShell блокирует локальный скрипт:
-     powershell -NoProfile -ExecutionPolicy Bypass -File ./INSTALL.ps1
+2. Дважды щёлкните INSTALL.cmd (рекомендуется).
+   Альтернатива: powershell -NoProfile -ExecutionPolicy Bypass -File .\\INSTALL.ps1
 3. После установки используйте LocalTube из меню Пуск.
 
 Установка выполняется в %LOCALAPPDATA%/LocalTube без прав администратора.

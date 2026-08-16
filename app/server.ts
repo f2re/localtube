@@ -1,4 +1,4 @@
-// LocalTube 1.4.3 — dependency-free cross-platform Deno backend.
+// LocalTube 1.4.4 — dependency-free cross-platform Deno backend.
 // No npm/jsr imports: the service remains usable offline after installation.
 
 declare const Deno: any;
@@ -28,6 +28,13 @@ type Job = {
   percent: number;
   speed: string;
   eta: string;
+  downloaded_bytes: number;
+  total_bytes: number;
+  total_is_estimate: boolean;
+  final_size_bytes: number;
+  current_file: string;
+  postprocessing: boolean;
+  progress_parts: Record<string, { downloaded: number; total: number; estimated: boolean }>;
   phase: string;
   playlist_item: string;
   outputs: string[];
@@ -88,6 +95,25 @@ function nowIso(): string { return new Date().toISOString().replace(/\.\d{3}Z$/,
 function safeString(v: unknown, max = 1000): string { return String(v ?? '').slice(0, max); }
 function clamp(v: number, lo: number, hi: number): number { return Math.max(lo, Math.min(hi, v)); }
 function delay(ms: number): Promise<void> { return new Promise((resolve) => setTimeout(resolve, ms)); }
+function rawNumber(v: string): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+function formatRate(bytesPerSecond: number | null): string {
+  if (bytesPerSecond === null || bytesPerSecond <= 0) return '';
+  const units = ['Б/с', 'КиБ/с', 'МиБ/с', 'ГиБ/с'];
+  let v = bytesPerSecond; let i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v >= 10 || i === 0 ? v.toFixed(0) : v.toFixed(1)} ${units[i]}`;
+}
+function formatEtaSeconds(seconds: number | null): string {
+  if (seconds === null || seconds < 0) return '';
+  const s = Math.round(seconds);
+  if (s < 60) return `${s}с`;
+  const m = Math.floor(s / 60); const rs = s % 60;
+  if (m < 60) return `${m}м ${String(rs).padStart(2, '0')}с`;
+  const h = Math.floor(m / 60); return `${h}ч ${String(m % 60).padStart(2, '0')}м`;
+}
 
 async function existsFile(path: string): Promise<boolean> {
   try { return (await Deno.stat(path)).isFile; } catch { return false; }
@@ -96,6 +122,16 @@ async function existsDir(path: string): Promise<boolean> {
   try { return (await Deno.stat(path)).isDirectory; } catch { return false; }
 }
 async function ensureDir(path: string): Promise<void> { await Deno.mkdir(path, { recursive: true }); }
+function jobTempDir(j: { id: string; settings: Settings }): string { return PLATFORM === 'windows' ? join(BASE_DIR, 'temp', j.id) : join(j.settings.download_dir, '.localtube-tmp', j.id); }
+async function cleanupJobTemp(j: { id: string; settings: Settings }): Promise<void> {
+  const dir = jobTempDir(j); const root = dirname(dir);
+  try { await Deno.remove(dir, { recursive: true }); } catch { /* already gone */ }
+  try {
+    let empty = true;
+    for await (const _ of Deno.readDir(root)) { empty = false; break; }
+    if (empty) await Deno.remove(root);
+  } catch { /* root may not exist or may contain another active job */ }
+}
 async function readText(path: string, fallback = ''): Promise<string> {
   try { return await Deno.readTextFile(path); } catch { return fallback; }
 }
@@ -424,14 +460,16 @@ async function validateJobPayload(payload: Json, base: Settings): Promise<{ url:
   return { url, mode, height, title: safeString(payload.title, 300), settings };
 }
 
-async function buildDownloadCommand(spec: { url: string; mode: 'video' | 'audio'; height: 'best' | number; title: string; settings: Settings }): Promise<string[]> {
+async function buildDownloadCommand(spec: { id: string; url: string; mode: 'video' | 'audio'; height: 'best' | number; title: string; settings: Settings }): Promise<string[]> {
   const s = spec.settings;
+  const tempDir = jobTempDir(spec);
   const args = [
     ...(await commonYtdlpArgs(s)), '--newline', '--progress', '--progress-delta', '0.5',
-    '--progress-template', 'download:__LOCALTUBE_PROGRESS__:%(progress._percent_str)s\t%(progress._speed_str)s\t%(progress._eta_str)s',
+    '--progress-template', 'download:__LOCALTUBE_PROGRESS__:%(progress.status)s\t%(info.format_id)s\t%(progress.downloaded_bytes)s\t%(progress.total_bytes)s\t%(progress.total_bytes_estimate)s\t%(progress.speed)s\t%(progress.eta)s\t%(progress.fragment_index)s\t%(progress.fragment_count)s\t%(progress.filename)s',
+    '--progress-template', 'postprocess:__LOCALTUBE_POSTPROCESS__:%(progress.status)s',
     '--retries', '10', '--fragment-retries', '10', '--file-access-retries', '3', '--retry-sleep', '2',
     '--concurrent-fragments', '4', '--continue', '--part', '--no-overwrites', '--trim-filenames', '180',
-    '--paths', s.download_dir, '--print', 'after_move:__LOCALTUBE_FINAL__:%(filepath)s',
+    '--paths', s.download_dir, '--paths', `temp:${tempDir}`, '--print', 'after_move:__LOCALTUBE_FINAL__:%(filepath)s',
   ];
   if (s.playlist) {
     args.push('--yes-playlist', '--output', '%(playlist_title|Playlist).120B/%(playlist_index)03d - %(title).150B [%(id)s].%(ext)s');
@@ -466,7 +504,9 @@ async function buildDownloadCommand(spec: { url: string; mode: 'video' | 'audio'
 function publicJob(j: Job, includeLogs = false): Json {
   const x: Json = {
     id: j.id, url: j.url, mode: j.mode, height: j.height, title: j.title, state: j.state, percent: j.percent,
-    speed: j.speed, eta: j.eta, phase: j.phase, playlist_item: j.playlist_item, outputs: [...j.outputs], error: j.error,
+    speed: j.speed, eta: j.eta, downloaded_bytes: j.downloaded_bytes, total_bytes: j.total_bytes, total_is_estimate: j.total_is_estimate,
+    final_size_bytes: j.final_size_bytes, current_file: j.current_file, postprocessing: j.postprocessing,
+    phase: j.phase, playlist_item: j.playlist_item, outputs: [...j.outputs], error: j.error,
     created_at: j.created_at, started_at: j.started_at, finished_at: j.finished_at, download_dir: j.settings.download_dir,
   };
   if (includeLogs) x.logs = [...j.logs.slice(-MAX_LOG_LINES)];
@@ -492,6 +532,8 @@ class JobManager {
           id: safeString(item.id, 64), url: safeString(item.url, 4096), mode: item.mode === 'audio' ? 'audio' : 'video',
           height: item.height === 'best' ? 'best' : Number(item.height) || 'best', title: safeString(item.title, 300), settings,
           state, percent: Number(item.percent) || 0, speed: safeString(item.speed, 80), eta: safeString(item.eta, 80),
+          downloaded_bytes: Number(item.downloaded_bytes) || 0, total_bytes: Number(item.total_bytes) || 0, total_is_estimate: item.total_is_estimate === true,
+          final_size_bytes: Number(item.final_size_bytes) || 0, current_file: safeString(item.current_file, 4096), postprocessing: false, progress_parts: {},
           phase: safeString(item.phase, 120), playlist_item: safeString(item.playlist_item, 80),
           outputs: Array.isArray(item.outputs) ? item.outputs.map((x: unknown) => safeString(x, 4096)) : [],
           error: safeString(item.error, 1000), created_at: safeString(item.created_at, 80) || nowIso(),
@@ -516,7 +558,8 @@ class JobManager {
     if (this.activeCount() >= MAX_ACTIVE_JOBS) throw new Error(`В очереди уже ${MAX_ACTIVE_JOBS} активных загрузок. Дождитесь завершения части очереди.`);
     const j: Job = {
       id: crypto.randomUUID().replace(/-/g, '').slice(0, 12), ...spec,
-      state: 'queued', percent: 0, speed: '', eta: '', phase: 'В очереди', playlist_item: '', outputs: [], error: '',
+      state: 'queued', percent: 0, speed: '', eta: '', downloaded_bytes: 0, total_bytes: 0, total_is_estimate: false,
+      final_size_bytes: 0, current_file: '', postprocessing: false, progress_parts: {}, phase: 'В очереди', playlist_item: '', outputs: [], error: '',
       created_at: nowIso(), started_at: null, finished_at: null, logs: [], cancel_requested: false,
     };
     this.jobs.set(j.id, j); this.order.push(j.id);
@@ -548,17 +591,44 @@ class JobManager {
     const s = line.trimEnd(); if (!s) return;
     j.logs.push(s.slice(-1400)); if (j.logs.length > MAX_LOG_LINES) j.logs.splice(0, j.logs.length - MAX_LOG_LINES);
     if (s.startsWith('__LOCALTUBE_FINAL__:')) {
-      const p = s.slice('__LOCALTUBE_FINAL__:'.length).trim(); if (p) j.outputs.push(p); j.percent = 100; j.phase = 'Готово'; return;
+      const p = s.slice('__LOCALTUBE_FINAL__:'.length).trim();
+      if (p && !j.outputs.includes(p)) j.outputs.push(p);
+      j.percent = Math.max(j.percent, 99); j.phase = 'Финализация'; j.postprocessing = true; j.speed = ''; j.eta = '';
+      return;
     }
     if (s.startsWith('__LOCALTUBE_PROGRESS__:')) {
-      const [pct = '', speed = '', eta = ''] = s.slice('__LOCALTUBE_PROGRESS__:'.length).split('\t');
-      const n = Number.parseFloat(pct.replace('%', '').trim()); if (Number.isFinite(n)) j.percent = clamp(n, 0, 100);
-      j.speed = speed.trim(); j.eta = eta.trim(); j.phase = 'Загрузка'; return;
+      const fields = s.slice('__LOCALTUBE_PROGRESS__:'.length).split('\t');
+      const status = (fields[0] || '').trim(); const formatId = (fields[1] || '').trim();
+      const downloaded = rawNumber((fields[2] || '').trim()) ?? 0;
+      const exactTotal = rawNumber((fields[3] || '').trim()); const estimatedTotal = rawNumber((fields[4] || '').trim());
+      const total = exactTotal ?? estimatedTotal ?? 0; const estimated = exactTotal === null && estimatedTotal !== null;
+      const speed = rawNumber((fields[5] || '').trim()); const eta = rawNumber((fields[6] || '').trim());
+      const fragmentIndex = rawNumber((fields[7] || '').trim()); const fragmentCount = rawNumber((fields[8] || '').trim());
+      const filename = fields.slice(9).join('\t').trim();
+      const key = `${formatId || 'format'}|${filename || 'current'}`;
+      j.progress_parts[key] = { downloaded, total, estimated };
+      const parts = Object.values(j.progress_parts);
+      j.downloaded_bytes = parts.reduce((n, p) => n + p.downloaded, 0);
+      j.total_bytes = parts.reduce((n, p) => n + p.total, 0);
+      j.total_is_estimate = parts.some((p) => p.estimated);
+      j.current_file = filename;
+      j.speed = formatRate(speed); j.eta = formatEtaSeconds(eta); j.postprocessing = false;
+      if (j.total_bytes > 0) j.percent = clamp((j.downloaded_bytes / j.total_bytes) * 95, 0, 95);
+      else if (fragmentIndex !== null && fragmentCount !== null && fragmentCount > 0) j.percent = clamp((fragmentIndex / fragmentCount) * 95, 0, 95);
+      else j.percent = Math.min(j.percent, 94);
+      j.phase = status === 'finished' ? 'Поток загружен' : 'Загрузка';
+      return;
+    }
+    if (s.startsWith('__LOCALTUBE_POSTPROCESS__:')) {
+      j.postprocessing = true; j.percent = Math.max(j.percent, 96); j.speed = ''; j.eta = ''; j.phase = 'Обработка'; return;
     }
     const pm = s.match(/\[download\]\s+Downloading item\s+(\d+)\s+of\s+(\d+)/);
-    if (pm) { j.playlist_item = `${pm[1]}/${pm[2]}`; j.percent = 0; j.phase = 'Загрузка плейлиста'; return; }
-    if (/\[(Merger|VideoRemuxer|VideoConvertor)\]/.test(s)) j.phase = 'Обработка видео';
-    else if (/\[(ExtractAudio|Metadata|EmbedThumbnail)\]/.test(s)) j.phase = 'Обработка аудио';
+    if (pm) { j.playlist_item = `${pm[1]}/${pm[2]}`; j.percent = 0; j.progress_parts = {}; j.downloaded_bytes = 0; j.total_bytes = 0; j.phase = 'Загрузка плейлиста'; return; }
+    if (/\[Merger\]/.test(s)) { j.phase = 'Слияние видео и аудио'; j.postprocessing = true; j.percent = Math.max(j.percent, 96); j.speed = ''; j.eta = ''; }
+    else if (/\[(VideoRemuxer|VideoConvertor)\]/.test(s)) { j.phase = 'Финализация контейнера'; j.postprocessing = true; j.percent = Math.max(j.percent, 97); j.speed = ''; j.eta = ''; }
+    else if (/\[ExtractAudio\]/.test(s)) { j.phase = 'Конвертация аудио'; j.postprocessing = true; j.percent = Math.max(j.percent, 96); j.speed = ''; j.eta = ''; }
+    else if (/\[Metadata\]/.test(s)) { j.phase = 'Запись метаданных'; j.postprocessing = true; j.percent = Math.max(j.percent, 98); j.speed = ''; j.eta = ''; }
+    else if (/\[EmbedThumbnail\]/.test(s)) { j.phase = 'Встраивание обложки'; j.postprocessing = true; j.percent = Math.max(j.percent, 98); j.speed = ''; j.eta = ''; }
     if (s.startsWith('ERROR:')) j.error = s.slice(6).trim().slice(0, 1000);
   }
   async readLines(stream: ReadableStream<Uint8Array>, j: Job): Promise<void> {
@@ -573,8 +643,9 @@ class JobManager {
     if (buf) this.log(j, buf.replace(/\r$/, ''));
   }
   async run(j: Job): Promise<void> {
-    j.state = 'running'; j.started_at = nowIso(); j.phase = 'Подготовка'; await this.persist();
+    j.state = 'running'; j.started_at = nowIso(); j.phase = 'Подготовка'; j.postprocessing = false; await this.persist();
     try {
+      await ensureDir(jobTempDir(j));
       const args = await buildDownloadCommand(j);
       const root = PLATFORM === 'windows' ? (Deno.env.get('SystemRoot') || 'C:/Windows') : '';
       const childPath = PLATFORM === 'windows'
@@ -599,7 +670,12 @@ class JobManager {
       await Promise.all([this.readLines(child.stdout, j), this.readLines(child.stderr, j)]);
       const status = await child.status; j.process = undefined;
       if (j.cancel_requested) { if ((j.state as JobState) !== 'interrupted') { j.state = 'cancelled'; j.phase = 'Отменено'; } }
-      else if (status.success) { j.state = 'completed'; j.percent = 100; j.phase = 'Готово'; }
+      else if (status.success) {
+        j.state = 'completed'; j.percent = 100; j.phase = 'Готово'; j.postprocessing = false; j.speed = ''; j.eta = '';
+        let finalSize = 0;
+        for (const output of j.outputs) { try { const st = await Deno.stat(output); if (st.isFile) finalSize += st.size; } catch { /* ignore */ } }
+        j.final_size_bytes = finalSize;
+      }
       else {
         j.state = 'failed'; j.phase = 'Ошибка';
         if (!j.error) {
@@ -612,7 +688,7 @@ class JobManager {
         j.state = 'failed'; j.phase = 'Ошибка'; j.error = safeString(e instanceof Error ? e.message : e, 1000);
       }
     }
-    finally { j.finished_at = nowIso(); j.process = undefined; await this.persist(); }
+    finally { j.finished_at = nowIso(); j.process = undefined; await cleanupJobTemp(j); await this.persist(); }
   }
   async shutdown(): Promise<void> {
     const running: Job[] = [];
@@ -901,19 +977,21 @@ if (Deno.args.includes('--self-test')) {
     const staticOk = await Promise.all(['index.html', 'app.js', 'styles.css'].map((f) => existsFile(`${STATIC_DIR}/${f}`)));
     const status = await runtimeStatus(true);
     const testSettings = await sanitizeSettings({ ...DEFAULT_SETTINGS, cookies_mode: 'none', download_dir: DEFAULT_DOWNLOAD_DIR });
-    const videoArgs = await buildDownloadCommand({ url: TEST_VIDEO_URL, mode: 'video', height: 1080, title: 'self-test', settings: testSettings });
-    const audioArgs = await buildDownloadCommand({ url: TEST_VIDEO_URL, mode: 'audio', height: 'best', title: 'self-test', settings: testSettings });
+    const videoArgs = await buildDownloadCommand({ id: 'selftest-video', url: TEST_VIDEO_URL, mode: 'video', height: 1080, title: 'self-test', settings: testSettings });
+    const audioArgs = await buildDownloadCommand({ id: 'selftest-audio', url: TEST_VIDEO_URL, mode: 'audio', height: 'best', title: 'self-test', settings: testSettings });
     const commandOk = videoArgs.includes('[height<=?1080]') || videoArgs.some((v) => v.includes('[height<=?1080]'));
     const mp4CompatibilityOk = videoArgs.some((v) => v.includes('[vcodec^=avc]')) && videoArgs.some((v) => v.includes('[acodec^=mp4a]'));
     const denoRuntimeOk = videoArgs.includes(`deno:${DENO_BIN}`) && videoArgs.includes('ejs:github');
+    const expectedTempArg = `temp:${jobTempDir({ id: 'selftest-video', settings: testSettings })}`;
+    const progressPipelineOk = videoArgs.some((v) => v.includes('progress.downloaded_bytes')) && videoArgs.some((v) => v.includes('postprocess:__LOCALTUBE_POSTPROCESS__')) && videoArgs.includes(expectedTempArg);
     const audioOk = audioArgs.includes('--extract-audio') && audioArgs.includes('--audio-format');
     const urlValidationOk = youtubeUrlOk(TEST_VIDEO_URL) && youtubeUrlOk(`https://youtu.be/${TEST_VIDEO_ID}`) &&
       youtubeUrlOk(`https://www.youtube.com/shorts/${TEST_VIDEO_ID}`) && youtubeUrlOk('https://www.youtube.com/playlist?list=PL123') &&
       !youtubeUrlOk('https://www.youtube.com/@channel') && !youtubeUrlOk('https://youtube.com.evil.example/watch?v=x') && !youtubeUrlOk('file:///etc/passwd');
-    const ok = Boolean(status.ready) && staticOk.every(Boolean) && commandOk && mp4CompatibilityOk && denoRuntimeOk && audioOk && urlValidationOk;
+    const ok = Boolean(status.ready) && staticOk.every(Boolean) && commandOk && mp4CompatibilityOk && denoRuntimeOk && progressPipelineOk && audioOk && urlValidationOk;
     console.log(JSON.stringify({
       ok, runtime: status, static_files: staticOk,
-      command_builder: { video_cap: commandOk, mp4_compatibility: mp4CompatibilityOk, deno_ejs_runtime: denoRuntimeOk, audio: audioOk },
+      command_builder: { video_cap: commandOk, mp4_compatibility: mp4CompatibilityOk, deno_ejs_runtime: denoRuntimeOk, progress_pipeline: progressPipelineOk, audio: audioOk },
       url_validation: urlValidationOk,
     }, null, 2));
     Deno.exit(ok ? 0 : 2);

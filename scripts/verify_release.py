@@ -116,14 +116,16 @@ with zipfile.ZipFile(win_zip) as z:
     names = set(z.namelist())
     required = [
         prefix + 'INSTALL.ps1',
+        prefix + 'INSTALL.cmd',
+        prefix + 'installer/install-windows.ps1',
         prefix + 'MANIFEST.sha256',
         prefix + 'payload/app/server.ts',
         prefix + 'payload/app/scripts/run_server.ps1',
-        prefix + 'control/START.ps1',
-        prefix + 'control/STOP.ps1',
-        prefix + 'control/DIAGNOSE.ps1',
-        prefix + 'control/UPDATE.ps1',
-        prefix + 'control/UNINSTALL.ps1',
+        prefix + 'control/windows/START.ps1',
+        prefix + 'control/windows/STOP.ps1',
+        prefix + 'control/windows/DIAGNOSE.ps1',
+        prefix + 'control/windows/UPDATE.ps1',
+        prefix + 'control/windows/UNINSTALL.ps1',
     ]
     for name in required:
         assert name in names, name

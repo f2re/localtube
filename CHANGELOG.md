@@ -1,5 +1,17 @@
 # 🗒️ Changelog
 
+## 1.4.4 — 2026-08-16
+
+- исправлен ложный `100%` во время FFmpeg merge/remux/metadata: 100% выставляется только после успешного завершения всей задачи;
+- прогресс теперь использует сырые `downloaded_bytes`, `total_bytes/total_bytes_estimate`, speed и ETA вместо декоративных `_..._str`;
+- несколько video/audio-потоков агрегируются по байтам, оценочный total помечается отдельно;
+- добавлен отдельный postprocess progress channel и indeterminate UI для слияния, конвертации и записи метаданных;
+- промежуточные `.part`, format streams и `.temp.*` перенесены в скрытый `.localtube-tmp/<job>` и автоматически очищаются;
+- после завершения LocalTube показывает фактический размер финального файла;
+- Windows получил `INSTALL.cmd` и единый `INSTALL.ps1`, работающий и из Release, и непосредственно из source checkout без Python/Node/admin;
+- Windows installer больше не останавливает текущую установку до успешного preflight нового runtime/backend;
+- README дополнен полными требованиями Windows и командами остановки/отключения автозапуска macOS.
+
 ## 1.4.3 — 2026-08-15
 
 - локальные health/API-запросы больше не зависят от `~/.curlrc`: `curl -q` отключает пользовательский config, а `--noproxy '*'` гарантирует прямой loopback;

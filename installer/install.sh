@@ -1,5 +1,5 @@
 #!/bin/bash
-# LocalTube 1.4.3 macOS installer.
+# LocalTube 1.4.4 macOS installer.
 # Runs with a deterministic environment and does not source zsh/bash profiles.
 # Compatible with Apple's /bin/bash 3.2.
 set -u
@@ -338,7 +338,7 @@ on_signal() {
 trap cleanup EXIT
 trap on_signal HUP INT TERM
 
-say 'LocalTube 1.4.3 — production installer'
+say 'LocalTube 1.4.4 — production installer'
 say '======================================'
 is_macos || fail 'Этот пакет предназначен только для macOS.'
 

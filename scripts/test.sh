@@ -18,6 +18,8 @@ echo '[health] startup readiness race regression'
 python3 scripts/check_health_startup.py
 echo '[loopback] curlrc/proxy isolation regression'
 python3 scripts/check_loopback_transport.py
+echo '[downloads] progress/temp-file/Windows installer regression'
+python3 scripts/check_progress_pipeline.py
 
 echo '[4/11] Unix runtime destination guard'
 _tmp_runtime_test="$(mktemp -d)"
