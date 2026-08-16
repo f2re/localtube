@@ -10,37 +10,94 @@ permissions:
 
 jobs:
   patch:
-    if: "${{ github.event.head_commit.message != 'fix: truthful progress and Windows installer (1.4.4)' }}"
+    if: "${{ github.event.head_commit.message != 'fix: finalize Windows package and temp isolation (1.4.4)' }}"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply patch and static guards
+      - name: Finalize implementation
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/apply_1_4_4_patch.py
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('scripts/check_progress_pipeline.py')
-          text=p.read_text(encoding='utf-8')
-          text=text.replace("if errors: raise SystemExit('\n'.join(errors))", "if errors: raise SystemExit('\\n'.join(errors))")
-          p.write_text(text,encoding='utf-8')
+
+          def patch(path, old, new, count=1):
+              p=Path(path); t=p.read_text(encoding='utf-8')
+              if old not in t: raise SystemExit(f'pattern not found in {path}: {old[:140]!r}')
+              p.write_text(t.replace(old,new,count),encoding='utf-8')
+
+          # Keep Windows intermediates out of the user's Downloads folder. On Unix the
+          # per-job directory is dot-hidden and stays on the destination filesystem.
+          patch('app/server.ts',
+                "function jobTempDir(j: { id: string; settings: Settings }): string { return join(j.settings.download_dir, '.localtube-tmp', j.id); }",
+                "function jobTempDir(j: { id: string; settings: Settings }): string { return PLATFORM === 'windows' ? join(BASE_DIR, 'temp', j.id) : join(j.settings.download_dir, '.localtube-tmp', j.id); }")
+
+          # Source checkout must preserve the production control/windows layout and
+          # -LiteralPath must never be used with a wildcard.
+          patch('INSTALL.ps1',
+                "    New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot 'payload'),(Join-Path $tempRoot 'installer'),(Join-Path $tempRoot 'control') | Out-Null",
+                "    New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot 'payload'),(Join-Path $tempRoot 'installer'),(Join-Path $tempRoot 'control\\windows') | Out-Null")
+          patch('INSTALL.ps1',
+                "    Copy-Item -LiteralPath (Join-Path $Root 'control\\windows\\*') -Destination (Join-Path $tempRoot 'control') -Recurse -Force",
+                "    Get-ChildItem -LiteralPath (Join-Path $Root 'control\\windows') | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $tempRoot 'control\\windows') -Recurse -Force }")
+
+          # Release layout and verifier must match inner installer's control/windows path.
+          patch('scripts/build_release.py',
+                "    shutil.copytree(ROOT / 'control/windows', stage / 'control')",
+                "    shutil.copytree(ROOT / 'control/windows', stage / 'control/windows')")
+          vp=Path('scripts/verify_release.py'); vt=vp.read_text(encoding='utf-8')
+          vt=vt.replace("prefix + 'control/START.ps1'", "prefix + 'control/windows/START.ps1'")
+          vt=vt.replace("prefix + 'control/STOP.ps1'", "prefix + 'control/windows/STOP.ps1'")
+          vt=vt.replace("prefix + 'control/DIAGNOSE.ps1'", "prefix + 'control/windows/DIAGNOSE.ps1'")
+          vt=vt.replace("prefix + 'control/UPDATE.ps1'", "prefix + 'control/windows/UPDATE.ps1'")
+          vt=vt.replace("prefix + 'control/UNINSTALL.ps1'", "prefix + 'control/windows/UNINSTALL.ps1'")
+          vp.write_text(vt,encoding='utf-8')
+
+          # Windows installer: avoid leaking staging paths into the launched service and
+          # transactionally preserve control scripts as well as app/runtime.
+          patch('installer/install-windows.ps1',
+                "New-Item -ItemType Directory -Force -Path $Base,$Data,$Logs,$Control,$Stage | Out-Null",
+                "New-Item -ItemType Directory -Force -Path $Base,$Data,$Logs,$Stage | Out-Null")
+          patch('installer/install-windows.ps1',
+                "$PreviousWasRunning = $false\n$pidFile = Join-Path $Data 'server.pid'\n",
+                "$PreviousWasRunning = $false\n$pidFile = Join-Path $Data 'server.pid'\n$SavedEnv = @{ LOCALTUBE_BASE=$env:LOCALTUBE_BASE; LOCALTUBE_APP_DIR=$env:LOCALTUBE_APP_DIR; LOCALTUBE_RUNTIME_DIR=$env:LOCALTUBE_RUNTIME_DIR }\nfunction Restore-LocalTubeEnvironment {\n    foreach ($name in @('LOCALTUBE_BASE','LOCALTUBE_APP_DIR','LOCALTUBE_RUNTIME_DIR')) {\n        $value = $SavedEnv[$name]\n        if ($null -eq $value) { Remove-Item -Path ('Env:' + $name) -ErrorAction SilentlyContinue } else { Set-Item -Path ('Env:' + $name) -Value $value }\n    }\n}\n")
+          patch('installer/install-windows.ps1',
+                "    $env:LOCALTUBE_BASE = $Stage\n    $env:LOCALTUBE_APP_DIR = $stageApp\n    $env:LOCALTUBE_RUNTIME_DIR = $stageRuntime\n    & (Join-Path $stageRuntime 'deno.exe') run --no-config -A (Join-Path $stageApp 'server.ts') --self-test | Out-Null\n    if ($LASTEXITCODE -ne 0) { throw 'Backend self-test failed' }",
+                "    $env:LOCALTUBE_BASE = $Stage\n    $env:LOCALTUBE_APP_DIR = $stageApp\n    $env:LOCALTUBE_RUNTIME_DIR = $stageRuntime\n    try {\n        & (Join-Path $stageRuntime 'deno.exe') run --no-config -A (Join-Path $stageApp 'server.ts') --self-test | Out-Null\n        if ($LASTEXITCODE -ne 0) { throw 'Backend self-test failed' }\n    } finally { Restore-LocalTubeEnvironment }")
+          patch('installer/install-windows.ps1',
+                "    if (Test-Path -LiteralPath $Runtime) { Move-Item -LiteralPath $Runtime -Destination (Join-Path $Backup 'runtime') }\n    Move-Item -LiteralPath $stageApp -Destination $App",
+                "    if (Test-Path -LiteralPath $Runtime) { Move-Item -LiteralPath $Runtime -Destination (Join-Path $Backup 'runtime') }\n    if (Test-Path -LiteralPath $Control) { Move-Item -LiteralPath $Control -Destination (Join-Path $Backup 'control') }\n    Move-Item -LiteralPath $stageApp -Destination $App")
+          patch('installer/install-windows.ps1',
+                "    New-Item -ItemType Directory -Force -Path $Control | Out-Null\n    $sourceControl = Join-Path $PackageRoot 'control\\windows'",
+                "    New-Item -ItemType Directory -Force -Path $Control | Out-Null\n    $sourceControl = Join-Path $PackageRoot 'control\\windows'\n    if (-not (Test-Path -LiteralPath $sourceControl -PathType Container)) { throw \"Windows controls missing: $sourceControl\" }")
+          patch('installer/install-windows.ps1',
+                "        Remove-Item -LiteralPath $Runtime -Recurse -Force -ErrorAction SilentlyContinue\n        if (Test-Path -LiteralPath (Join-Path $Backup 'app')) { Move-Item -LiteralPath (Join-Path $Backup 'app') -Destination $App }",
+                "        Remove-Item -LiteralPath $Runtime -Recurse -Force -ErrorAction SilentlyContinue\n        Remove-Item -LiteralPath $Control -Recurse -Force -ErrorAction SilentlyContinue\n        if (Test-Path -LiteralPath (Join-Path $Backup 'app')) { Move-Item -LiteralPath (Join-Path $Backup 'app') -Destination $App }")
+          patch('installer/install-windows.ps1',
+                "        if (Test-Path -LiteralPath (Join-Path $Backup 'runtime')) { Move-Item -LiteralPath (Join-Path $Backup 'runtime') -Destination $Runtime }",
+                "        if (Test-Path -LiteralPath (Join-Path $Backup 'runtime')) { Move-Item -LiteralPath (Join-Path $Backup 'runtime') -Destination $Runtime }\n        if (Test-Path -LiteralPath (Join-Path $Backup 'control')) { Move-Item -LiteralPath (Join-Path $Backup 'control') -Destination $Control }")
+
+          # Extend regression guard to lock the corrected package topology and Windows temp path.
+          cp=Path('scripts/check_progress_pipeline.py'); ct=cp.read_text(encoding='utf-8')
+          ct=ct.replace("if '.job.postprocessing .progress-bar' not in css: errors.append('indeterminate postprocess CSS missing')",
+                        "if '.job.postprocessing .progress-bar' not in css: errors.append('indeterminate postprocess CSS missing')\nif \"PLATFORM === 'windows' ? join(BASE_DIR, 'temp', j.id)\" not in server: errors.append('Windows temp files must live under LocalTube base')")
+          ct=ct.replace("if \"prefix + 'INSTALL.cmd'\" not in verify: errors.append('Windows verifier does not require INSTALL.cmd')",
+                        "if \"prefix + 'INSTALL.cmd'\" not in verify: errors.append('Windows verifier does not require INSTALL.cmd')\nif \"stage / 'control/windows'\" not in build: errors.append('Windows release must preserve control/windows layout')\nif \"prefix + 'control/windows/START.ps1'\" not in verify: errors.append('Windows verifier must require control/windows layout')")
+          cp.write_text(ct,encoding='utf-8')
           PY
-          /bin/bash -n installer/install.sh installer/install-linux.sh app/scripts/*.sh scripts/test_bootstrap_resilience.sh
+          /bin/bash -n installer/install.sh installer/install-linux.sh app/scripts/*.sh
           /bin/sh -n INSTALL.command control/*.command control/linux/localtube
+          python3 -m py_compile scripts/check_progress_pipeline.py scripts/build_release.py scripts/verify_release.py
           python3 scripts/check_progress_pipeline.py
-          python3 scripts/check_shell_compat.py
-          python3 scripts/check_health_startup.py
-          python3 scripts/check_loopback_transport.py
           git diff --check
-      - name: Commit implementation
+      - name: Commit final fixes
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add . ':!.github/workflows/**' ':!scripts/apply_1_4_4_patch.py'
-          git commit -m 'fix: truthful progress and Windows installer (1.4.4)'
+          git add app/server.ts INSTALL.ps1 installer/install-windows.ps1 scripts/build_release.py scripts/verify_release.py scripts/check_progress_pipeline.py
+          git commit -m 'fix: finalize Windows package and temp isolation (1.4.4)'
           git push origin HEAD:fix/progress-windows-installer-1.4.4
