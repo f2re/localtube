@@ -10,7 +10,7 @@ if ($PSVersionTable.PSVersion.Major -lt 5) { throw 'LocalTube requires Windows P
 if (-not [Environment]::Is64BitOperatingSystem) { throw 'LocalTube requires 64-bit Windows 10/11.' }
 $os = [Environment]::OSVersion.Version
 if ($os.Major -lt 10) { throw "LocalTube requires Windows 10/11; detected $os" }
-Write-Host 'LocalTube 1.4.4 — Windows installer'
+Write-Host 'LocalTube 1.4.5 — Windows installer'
 Write-Host '================================='
 Write-Host "Windows: $os"
 Write-Host "PowerShell: $($PSVersionTable.PSVersion)"

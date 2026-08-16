@@ -1,5 +1,14 @@
 # 🗒️ Changelog
 
+## 1.4.5
+
+- macOS installer distinguishes managed LocalTube jobs from orphan/manual `yt-dlp`/FFmpeg processes.
+- Active LocalTube downloads still block upgrades, but a compatible runtime used by an unrelated process is preserved instead of aborting the whole app/UI update.
+- Runtime ownership is checked before network bootstrap, avoiding pointless Deno/yt-dlp/FFmpeg re-downloads in the deferred-runtime path.
+- Runtime replacement is re-checked immediately before the transaction to close staging races.
+- Production package validation now includes the LocalTube branding assets.
+- Includes the new LocalTube favicon/header identity merged after 1.4.4.
+
 ## 1.4.4 — 2026-08-16
 
 - исправлен ложный `100%` во время FFmpeg merge/remux/metadata: 100% выставляется только после успешного завершения всей задачи;
