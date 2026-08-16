@@ -20,6 +20,8 @@ echo '[loopback] curlrc/proxy isolation regression'
 python3 scripts/check_loopback_transport.py
 echo '[downloads] progress/temp-file/Windows installer regression'
 python3 scripts/check_progress_pipeline.py
+echo '[installer] active-runtime ownership/deferral regression'
+python3 scripts/check_installer_runtime_deferral.py
 
 echo '[4/11] Unix runtime destination guard'
 _tmp_runtime_test="$(mktemp -d)"
