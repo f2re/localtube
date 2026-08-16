@@ -13,7 +13,13 @@ function Invoke-ProductionInstaller([string]$PackageRoot, [switch]$InnerSelfTest
 $releasePayload = Join-Path $Root 'payload\app\server.ts'
 $releaseInner = Join-Path $Root 'installer\install-windows.ps1'
 if ((Test-Path -LiteralPath $releasePayload) -and (Test-Path -LiteralPath $releaseInner)) {
+    if ($SelfTest) {
+        foreach ($rel in @('payload\app\server.ts','installer\install-windows.ps1','control\windows\START.ps1','control\windows\STOP.ps1')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $Root $rel) -PathType Leaf)) { throw "Release layout incomplete: $rel" }
+        }
+    }
     Invoke-ProductionInstaller $Root -InnerSelfTest:$SelfTest
+    if ($SelfTest) { Write-Host 'LocalTube Windows release layout self-test: OK' }
     exit 0
 }
 
@@ -25,18 +31,26 @@ $required = @(
 foreach ($rel in $required) {
     if (-not (Test-Path -LiteralPath (Join-Path $Root $rel) -PathType Leaf)) { throw "Incomplete source checkout: missing $rel" }
 }
-if ($SelfTest) {
-    & (Join-Path $Root 'installer\install-windows.ps1') -SelfTest
-    Write-Host 'LocalTube Windows source-checkout layout self-test: OK'
-    exit 0
-}
 
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('localtube-source-install-' + [Guid]::NewGuid().ToString('N'))
 try {
     New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot 'payload'),(Join-Path $tempRoot 'installer'),(Join-Path $tempRoot 'control\windows') | Out-Null
     Copy-Item -LiteralPath (Join-Path $Root 'app') -Destination (Join-Path $tempRoot 'payload\app') -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $Root 'installer\install-windows.ps1') -Destination (Join-Path $tempRoot 'installer\install-windows.ps1') -Force
-    Get-ChildItem -LiteralPath (Join-Path $Root 'control\windows') | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $tempRoot 'control\windows') -Recurse -Force }
+    Get-ChildItem -LiteralPath (Join-Path $Root 'control\windows') | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $tempRoot 'control\windows') -Recurse -Force
+    }
+
+    foreach ($rel in @('payload\app\server.ts','installer\install-windows.ps1','control\windows\START.ps1','control\windows\STOP.ps1')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $tempRoot $rel) -PathType Leaf)) { throw "Generated production layout incomplete: $rel" }
+    }
+
+    if ($SelfTest) {
+        Invoke-ProductionInstaller $tempRoot -InnerSelfTest
+        Write-Host 'LocalTube Windows source-checkout layout self-test: OK'
+        exit 0
+    }
+
     Write-Host 'LocalTube: detected git/source checkout; creating temporary production package.'
     Invoke-ProductionInstaller $tempRoot
 } finally {
