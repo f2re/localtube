@@ -1,0 +1,61 @@
+name: Finalize LocalTube 1.4.4
+
+on:
+  push:
+    branches:
+      - fix/progress-windows-installer-1.4.4
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: "${{ github.event.head_commit.message != 'fix: make progress temp self-test platform-aware' }}"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply final corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def patch(path, old, new):
+              p=Path(path); t=p.read_text(encoding='utf-8')
+              if old not in t: raise SystemExit(f'pattern not found in {path}: {old[:160]!r}')
+              p.write_text(t.replace(old,new,1),encoding='utf-8')
+
+          patch('app/server.ts',
+            "const progressPipelineOk = videoArgs.some((v) => v.includes('progress.downloaded_bytes')) && videoArgs.some((v) => v.includes('postprocess:__LOCALTUBE_POSTPROCESS__')) && videoArgs.some((v) => v.includes('temp:') && v.includes('.localtube-tmp'));",
+            "const expectedTempArg = `temp:${jobTempDir({ id: 'selftest-video', settings: testSettings })}`;\n    const progressPipelineOk = videoArgs.some((v) => v.includes('progress.downloaded_bytes')) && videoArgs.some((v) => v.includes('postprocess:__LOCALTUBE_POSTPROCESS__')) && videoArgs.includes(expectedTempArg);")
+
+          # Avoid Python invalid-escape warning in the generated Windows quick-start text.
+          p=Path('scripts/build_release.py'); t=p.read_text(encoding='utf-8')
+          t=t.replace('powershell -NoProfile -ExecutionPolicy Bypass -File .\\INSTALL.ps1', 'powershell -NoProfile -ExecutionPolicy Bypass -File .\\\\INSTALL.ps1')
+          p.write_text(t,encoding='utf-8')
+
+          patch('README.md',
+            '- 🧹 `.part`, отдельные дорожки и FFmpeg `.temp.*` хранятся в скрытом `.localtube-tmp` и удаляются после задачи;',
+            '- 🧹 промежуточные `.part`, отдельные дорожки и FFmpeg `.temp.*` изолированы от готовых файлов: на macOS/Linux — в скрытом `.localtube-tmp`, на Windows — в `%LOCALAPPDATA%\\LocalTube\\temp`; после задачи каталог очищается;')
+
+          # Lock the self-test against another hard-coded Unix temp path regression.
+          p=Path('scripts/check_progress_pipeline.py'); t=p.read_text(encoding='utf-8')
+          t=t.replace("if 'progress._percent_str' in server: errors.append('server still parses decorative _percent_str')",
+                      "if 'progress._percent_str' in server: errors.append('server still parses decorative _percent_str')\nif 'videoArgs.includes(expectedTempArg)' not in server: errors.append('backend self-test must validate the computed platform temp path')")
+          p.write_text(t,encoding='utf-8')
+          PY
+          python3 -m py_compile scripts/build_release.py scripts/check_progress_pipeline.py
+          python3 scripts/check_progress_pipeline.py
+          git diff --check
+      - name: Commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/server.ts scripts/build_release.py scripts/check_progress_pipeline.py README.md
+          git commit -m 'fix: make progress temp self-test platform-aware'
+          git push origin HEAD:fix/progress-windows-installer-1.4.4
