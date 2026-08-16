@@ -122,7 +122,7 @@ async function existsDir(path: string): Promise<boolean> {
   try { return (await Deno.stat(path)).isDirectory; } catch { return false; }
 }
 async function ensureDir(path: string): Promise<void> { await Deno.mkdir(path, { recursive: true }); }
-function jobTempDir(j: { id: string; settings: Settings }): string { return join(j.settings.download_dir, '.localtube-tmp', j.id); }
+function jobTempDir(j: { id: string; settings: Settings }): string { return PLATFORM === 'windows' ? join(BASE_DIR, 'temp', j.id) : join(j.settings.download_dir, '.localtube-tmp', j.id); }
 async function cleanupJobTemp(j: { id: string; settings: Settings }): Promise<void> {
   const dir = jobTempDir(j); const root = dirname(dir);
   try { await Deno.remove(dir, { recursive: true }); } catch { /* already gone */ }

@@ -282,7 +282,7 @@ def build_windows() -> Path:
     shutil.copy2(ROOT / 'INSTALL.cmd', stage / 'INSTALL.cmd')
     (stage / 'installer').mkdir(parents=True, exist_ok=True)
     shutil.copy2(ROOT / 'installer/install-windows.ps1', stage / 'installer/install-windows.ps1')
-    shutil.copytree(ROOT / 'control/windows', stage / 'control')
+    shutil.copytree(ROOT / 'control/windows', stage / 'control/windows')
     (stage / 'README.txt').write_text(
         f'''LocalTube {VERSION} — Windows
 

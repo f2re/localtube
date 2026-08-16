@@ -33,10 +33,10 @@ if ($SelfTest) {
 
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('localtube-source-install-' + [Guid]::NewGuid().ToString('N'))
 try {
-    New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot 'payload'),(Join-Path $tempRoot 'installer'),(Join-Path $tempRoot 'control') | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot 'payload'),(Join-Path $tempRoot 'installer'),(Join-Path $tempRoot 'control\windows') | Out-Null
     Copy-Item -LiteralPath (Join-Path $Root 'app') -Destination (Join-Path $tempRoot 'payload\app') -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $Root 'installer\install-windows.ps1') -Destination (Join-Path $tempRoot 'installer\install-windows.ps1') -Force
-    Copy-Item -LiteralPath (Join-Path $Root 'control\windows\*') -Destination (Join-Path $tempRoot 'control') -Recurse -Force
+    Get-ChildItem -LiteralPath (Join-Path $Root 'control\windows') | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $tempRoot 'control\windows') -Recurse -Force }
     Write-Host 'LocalTube: detected git/source checkout; creating temporary production package.'
     Invoke-ProductionInstaller $tempRoot
 } finally {
