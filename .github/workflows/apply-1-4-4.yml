@@ -21,6 +21,13 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/apply_1_4_4_patch.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/check_progress_pipeline.py')
+          text=p.read_text(encoding='utf-8')
+          text=text.replace("if errors: raise SystemExit('\n'.join(errors))", "if errors: raise SystemExit('\\n'.join(errors))")
+          p.write_text(text,encoding='utf-8')
+          PY
           /bin/bash -n installer/install.sh installer/install-linux.sh app/scripts/*.sh scripts/test_bootstrap_resilience.sh
           /bin/sh -n INSTALL.command control/*.command control/linux/localtube
           python3 scripts/check_progress_pipeline.py
