@@ -149,12 +149,17 @@
     if (!url) { showMsg(els.urlMsg, 'Вставьте ссылку YouTube.'); return; }
     if (!force && url === state.lastInspected) return;
     showMsg(els.urlMsg, ''); els.inspect.disabled = true; els.inspect.textContent = 'Определяю…';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 35_000);
     try {
-      const data = await api('/api/inspect', { method: 'POST', body: { url, ...collectSettings() } });
+      const data = await api('/api/inspect', { method: 'POST', signal: controller.signal, body: { url, ...collectSettings() } });
       state.lastInspected = url; renderPreview(data.video);
     } catch (e) {
-      state.video = null; els.preview.classList.add('hidden'); showMsg(els.urlMsg, e.message);
-    } finally { els.inspect.disabled = false; els.inspect.textContent = 'Определить'; }
+      state.video = null; els.preview.classList.add('hidden');
+      showMsg(els.urlMsg, e.name === 'AbortError' ? 'YouTube отвечает слишком долго. Повторите попытку.' : e.message);
+    } finally {
+      clearTimeout(timeout); els.inspect.disabled = false; els.inspect.textContent = 'Определить';
+    }
   }
 
   function scheduleInspect() {

@@ -407,11 +407,11 @@ async function inspectVideo(url: string, settings: Settings): Promise<Json> {
   if (!youtubeUrlOk(url)) throw new Error('Разрешены только ссылки YouTube / youtu.be.');
   const purePlaylist = youtubeUrlKind(url) === 'playlist';
   const args = [
-    ...(await commonYtdlpArgs(settings)), '--socket-timeout', '20', '--retries', '3', '--skip-download',
+    ...(await commonYtdlpArgs(settings)), '--socket-timeout', '10', '--retries', '1', '--skip-download',
     '--dump-single-json', '--no-warnings', ...(purePlaylist ? ['--playlist-items', '1'] : ['--no-playlist']), url,
   ];
   let r;
-  try { r = await runCapture(YTDLP, args, 75_000); }
+  try { r = await runCapture(YTDLP, args, 30_000); }
   catch (e) { if (String(e).includes('timeout')) throw new Error('YouTube отвечает слишком долго. Повторите попытку.'); throw e; }
   if (r.code !== 0) {
     const lines = (r.stderr || r.stdout || '').trim().split(/\r?\n/).filter(Boolean);
