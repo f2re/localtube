@@ -11,6 +11,8 @@ checks = {
     'preflight before bootstrap': s.find('consider_runtime_deferral') < s.find('lt_install_runtime "$STAGE/runtime"'),
     'no old unconditional blocker': 'Обнаружен активный процесс yt-dlp/FFmpeg предыдущего runtime' not in s,
     'brand assets packaged': all(x in s for x in ['static/brand.css','static/brand/favicon.svg','static/brand/favicon.ico','static/brand/icon-192.png']),
+    'source checkout handoff': 'обнаружен git/source checkout; перенаправляю на ./INSTALL.command' in s and '/bin/sh "$PACKAGE_ROOT/INSTALL.command" "$MODE"' in s,
+    'root install blocked': 'Не запускайте установщик через sudo/root' in s,
 }
 bad = [name for name, ok in checks.items() if not ok]
 if bad:

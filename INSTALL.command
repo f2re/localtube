@@ -20,6 +20,10 @@ fail() {
   exit 2
 }
 
+if [ "$(/usr/bin/id -u)" -eq 0 ]; then
+  fail 'не запускайте установку через sudo/root; LocalTube устанавливается в профиль текущего пользователя'
+fi
+
 run_clean_installer() {
   _root=$1
   /usr/bin/env -i \

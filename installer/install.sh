@@ -1,5 +1,5 @@
 #!/bin/bash
-# LocalTube 1.4.6 macOS installer.
+# LocalTube 1.4.7 macOS installer.
 # Runs with a deterministic environment and does not source zsh/bash profiles.
 # Compatible with Apple's /bin/bash 3.2.
 set -u
@@ -386,7 +386,27 @@ on_signal() {
 trap cleanup EXIT
 trap on_signal HUP INT TERM
 
-say 'LocalTube 1.4.5 — production installer'
+# LocalTube is a per-user LaunchAgent application. Running as root would install
+# files for the wrong launchd domain and can leave root-owned state in the user's HOME.
+if [ "$(/usr/bin/id -u)" -eq 0 ]; then
+  fail 'Не запускайте установщик через sudo/root. Запустите его обычным пользователем: ./INSTALL.command или ./installer/install.sh.'
+fi
+
+# installer/install.sh is the production-package worker. If a user invokes it
+# directly from a git checkout, transparently hand off to the source entry point
+# instead of reporting a misleading "Повреждён архив: payload/..." error.
+if [ ! -f "$PAYLOAD/server.ts" ] && [ -f "$PACKAGE_ROOT/app/server.ts" ] && [ -f "$PACKAGE_ROOT/INSTALL.command" ]; then
+  say 'LocalTube: обнаружен git/source checkout; перенаправляю на ./INSTALL.command.'
+  trap - EXIT HUP INT TERM
+  exec /usr/bin/env -i \
+    HOME="$HOME" \
+    USER="${USER:-}" \
+    LOGNAME="${LOGNAME:-${USER:-}}" \
+    PATH='/usr/bin:/bin:/usr/sbin:/sbin' \
+    /bin/sh "$PACKAGE_ROOT/INSTALL.command" "$MODE"
+fi
+
+say 'LocalTube 1.4.7 — production installer'
 say '======================================'
 is_macos || fail 'Этот пакет предназначен только для macOS.'
 
