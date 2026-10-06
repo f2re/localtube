@@ -1,5 +1,5 @@
 #!/bin/bash
-# LocalTube 1.4.5 macOS installer.
+# LocalTube 1.4.6 macOS installer.
 # Runs with a deterministic environment and does not source zsh/bash profiles.
 # Compatible with Apple's /bin/bash 3.2.
 set -u

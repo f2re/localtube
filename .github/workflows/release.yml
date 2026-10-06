@@ -2,7 +2,10 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags: ['v*']
+    paths:
+      - 'app/VERSION'
   workflow_dispatch:
 
 permissions:
@@ -59,14 +62,29 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           VERSION="$(cat app/VERSION)"
-          gh release create "${GITHUB_REF_NAME}" \
+          TAG="v${VERSION}"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+            if [[ "$TAG" != "v${VERSION}" ]]; then
+              echo "Tag $TAG does not match app/VERSION=$VERSION" >&2
+              exit 2
+            fi
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; nothing to publish."
+            exit 0
+          fi
+          TARGET_ARGS=()
+          if [[ "${GITHUB_REF}" != refs/tags/* ]]; then
+            TARGET_ARGS=(--target "${GITHUB_SHA}")
+          fi
+          gh release create "$TAG" \
             "dist/LocalTube-macOS-v${VERSION}.zip" \
             "dist/LocalTube-macOS-v${VERSION}.zip.sha256" \
             "dist/LocalTube-macOS-v${VERSION}.dmg" \
@@ -75,4 +93,4 @@ jobs:
             "dist/LocalTube-Linux-v${VERSION}.tar.gz.sha256" \
             "dist/LocalTube-Windows-v${VERSION}.zip" \
             "dist/LocalTube-Windows-v${VERSION}.zip.sha256" \
-            --title "LocalTube ${VERSION}" --generate-notes
+            --title "LocalTube ${VERSION}" --generate-notes "${TARGET_ARGS[@]}"

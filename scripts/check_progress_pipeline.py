@@ -6,7 +6,7 @@ css=Path('app/static/styles.css').read_text(encoding='utf-8')
 build=Path('scripts/build_release.py').read_text(encoding='utf-8')
 verify=Path('scripts/verify_release.py').read_text(encoding='utf-8')
 errors=[]
-for needle in ['progress.downloaded_bytes','progress.total_bytes_estimate','postprocess:__LOCALTUBE_POSTPROCESS__','.localtube-tmp','final_size_bytes','await cleanupJobTemp(j)']:
+for needle in ['progress.downloaded_bytes','progress.total_bytes_estimate','postprocess:__LOCALTUBE_POSTPROCESS__','.localtube-tmp','final_size_bytes','await cleanupJobTemp(j)','youtubeNeedsClientRecovery','youtube:player_client=default,web_embedded','transactionalUpdateYtdlp()','youtube_recovery']:
     if needle not in server: errors.append(f'server missing {needle}')
 if 'progress._percent_str' in server: errors.append('server still parses decorative _percent_str')
 if 'videoArgs.includes(expectedTempArg)' not in server: errors.append('backend self-test must validate the computed platform temp path')
@@ -20,4 +20,4 @@ if "prefix + 'INSTALL.cmd'" not in verify: errors.append('Windows verifier does 
 if "stage / 'control/windows'" not in build: errors.append('Windows release must preserve control/windows layout')
 if "prefix + 'control/windows/START.ps1'" not in verify: errors.append('Windows verifier must require control/windows layout')
 if errors: raise SystemExit('\n'.join(errors))
-print('download progress/temp-file + Windows installer guard: OK')
+print('download progress/temp-file + YouTube recovery + Windows installer guard: OK')

@@ -1,4 +1,4 @@
-// LocalTube 1.4.5 — dependency-free cross-platform Deno backend.
+// LocalTube 1.4.6 — dependency-free cross-platform Deno backend.
 // No npm/jsr imports: the service remains usable offline after installation.
 
 declare const Deno: any;
@@ -388,7 +388,7 @@ async function cookieArgs(settings: Settings): Promise<string[]> {
   return [];
 }
 
-async function commonYtdlpArgs(settings: Settings): Promise<string[]> {
+async function commonYtdlpArgs(settings: Settings, recovery = false): Promise<string[]> {
   const missing: string[] = [];
   for (const [name, path] of [['yt-dlp', YTDLP], ['ffmpeg', FFMPEG], ['ffprobe', FFPROBE], ['Deno', DENO_BIN]]) {
     if (!(await existsFile(path))) missing.push(name);
@@ -399,19 +399,31 @@ async function commonYtdlpArgs(settings: Settings): Promise<string[]> {
     '--js-runtimes', `deno:${DENO_BIN}`,
     '--remote-components', 'ejs:github',
     '--ffmpeg-location', RUNTIME_DIR,
+    ...(recovery ? ['--extractor-args', 'youtube:player_client=default,web_embedded'] : []),
     ...(await cookieArgs(settings)),
   ];
+}
+
+function youtubeNeedsClientRecovery(text: string): boolean {
+  return /the page needs to be reloaded/i.test(text) ||
+    /tv_downgraded.*player response playability status:\s*UNPLAYABLE/i.test(text);
 }
 
 async function inspectVideo(url: string, settings: Settings): Promise<Json> {
   if (!youtubeUrlOk(url)) throw new Error('Разрешены только ссылки YouTube / youtu.be.');
   const purePlaylist = youtubeUrlKind(url) === 'playlist';
-  const args = [
-    ...(await commonYtdlpArgs(settings)), '--socket-timeout', '10', '--retries', '1', '--skip-download',
-    '--dump-single-json', '--no-warnings', ...(purePlaylist ? ['--playlist-items', '1'] : ['--no-playlist']), url,
-  ];
+  const runInspect = async (recovery = false) => {
+    const args = [
+      ...(await commonYtdlpArgs(settings, recovery)), '--socket-timeout', '10', '--retries', '1', '--skip-download',
+      '--dump-single-json', '--no-warnings', ...(purePlaylist ? ['--playlist-items', '1'] : ['--no-playlist']), url,
+    ];
+    return await runCapture(YTDLP, args, 30_000);
+  };
   let r;
-  try { r = await runCapture(YTDLP, args, 30_000); }
+  try {
+    r = await runInspect(false);
+    if (r.code !== 0 && youtubeNeedsClientRecovery(`${r.stderr}\n${r.stdout}`)) r = await runInspect(true);
+  }
   catch (e) { if (String(e).includes('timeout')) throw new Error('YouTube отвечает слишком долго. Повторите попытку.'); throw e; }
   if (r.code !== 0) {
     const lines = (r.stderr || r.stdout || '').trim().split(/\r?\n/).filter(Boolean);
@@ -460,11 +472,11 @@ async function validateJobPayload(payload: Json, base: Settings): Promise<{ url:
   return { url, mode, height, title: safeString(payload.title, 300), settings };
 }
 
-async function buildDownloadCommand(spec: { id: string; url: string; mode: 'video' | 'audio'; height: 'best' | number; title: string; settings: Settings }): Promise<string[]> {
+async function buildDownloadCommand(spec: { id: string; url: string; mode: 'video' | 'audio'; height: 'best' | number; title: string; settings: Settings }, recovery = false): Promise<string[]> {
   const s = spec.settings;
   const tempDir = jobTempDir(spec);
   const args = [
-    ...(await commonYtdlpArgs(s)), '--newline', '--progress', '--progress-delta', '0.5',
+    ...(await commonYtdlpArgs(s, recovery)), '--newline', '--progress', '--progress-delta', '0.5',
     '--progress-template', 'download:__LOCALTUBE_PROGRESS__:%(progress.status)s\t%(info.format_id)s\t%(progress.downloaded_bytes)s\t%(progress.total_bytes)s\t%(progress.total_bytes_estimate)s\t%(progress.speed)s\t%(progress.eta)s\t%(progress.fragment_index)s\t%(progress.fragment_count)s\t%(progress.filename)s',
     '--progress-template', 'postprocess:__LOCALTUBE_POSTPROCESS__:%(progress.status)s',
     '--retries', '10', '--fragment-retries', '10', '--file-access-retries', '3', '--retry-sleep', '2',
@@ -646,7 +658,6 @@ class JobManager {
     j.state = 'running'; j.started_at = nowIso(); j.phase = 'Подготовка'; j.postprocessing = false; await this.persist();
     try {
       await ensureDir(jobTempDir(j));
-      const args = await buildDownloadCommand(j);
       const root = PLATFORM === 'windows' ? (Deno.env.get('SystemRoot') || 'C:/Windows') : '';
       const childPath = PLATFORM === 'windows'
         ? `${RUNTIME_DIR};${root}/System32;${root}/System32/WindowsPowerShell/v1.0`
@@ -663,12 +674,35 @@ class JobManager {
         childEnv.SystemRoot = root;
         childEnv.TEMP = Deno.env.get('TEMP') || childEnv.TMPDIR;
       }
-      const child = new Deno.Command(YTDLP, {
-        args, stdin: 'null', stdout: 'piped', stderr: 'piped', cwd: j.settings.download_dir, env: childEnv,
-      }).spawn();
-      j.process = child;
-      await Promise.all([this.readLines(child.stdout, j), this.readLines(child.stderr, j)]);
-      const status = await child.status; j.process = undefined;
+      const runAttempt = async (recovery = false) => {
+        const args = await buildDownloadCommand(j, recovery);
+        const child = new Deno.Command(YTDLP, {
+          args, stdin: 'null', stdout: 'piped', stderr: 'piped', cwd: j.settings.download_dir, env: childEnv,
+        }).spawn();
+        j.process = child;
+        await Promise.all([this.readLines(child.stdout, j), this.readLines(child.stderr, j)]);
+        const status = await child.status;
+        j.process = undefined;
+        return status;
+      };
+      let status = await runAttempt(false);
+      if (!status.success && !j.cancel_requested && youtubeNeedsClientRecovery(j.logs.slice(-50).join('\n'))) {
+        j.error = ''; j.phase = 'Восстановление совместимости YouTube'; j.postprocessing = false; j.speed = ''; j.eta = '';
+        this.log(j, '[LocalTube] YouTube отклонил стандартный клиент. Обновляю yt-dlp и повторяю через совместимый web-клиент.');
+        await this.persist();
+        if (!(await isExternalToolWrapper(YTDLP, 'yt-dlp'))) {
+          try {
+            const updated = await transactionalUpdateYtdlp();
+            this.log(j, `[LocalTube] yt-dlp: ${updated.before || '?'} → ${updated.after || '?'}.`);
+          } catch (e) {
+            this.log(j, `[LocalTube] Автообновление yt-dlp не удалось, продолжаю с текущей версией: ${safeString(e instanceof Error ? e.message : e, 500)}`);
+          }
+        }
+        await cleanupJobTemp(j); await ensureDir(jobTempDir(j));
+        j.progress_parts = {}; j.downloaded_bytes = 0; j.total_bytes = 0; j.total_is_estimate = false;
+        j.percent = 0; j.current_file = ''; j.postprocessing = false; j.speed = ''; j.eta = ''; j.phase = 'Повтор загрузки';
+        status = await runAttempt(true);
+      }
       if (j.cancel_requested) { if ((j.state as JobState) !== 'interrupted') { j.state = 'cancelled'; j.phase = 'Отменено'; } }
       else if (status.success) {
         j.state = 'completed'; j.percent = 100; j.phase = 'Готово'; j.postprocessing = false; j.speed = ''; j.eta = '';
@@ -979,19 +1013,23 @@ if (Deno.args.includes('--self-test')) {
     const testSettings = await sanitizeSettings({ ...DEFAULT_SETTINGS, cookies_mode: 'none', download_dir: DEFAULT_DOWNLOAD_DIR });
     const videoArgs = await buildDownloadCommand({ id: 'selftest-video', url: TEST_VIDEO_URL, mode: 'video', height: 1080, title: 'self-test', settings: testSettings });
     const audioArgs = await buildDownloadCommand({ id: 'selftest-audio', url: TEST_VIDEO_URL, mode: 'audio', height: 'best', title: 'self-test', settings: testSettings });
+    const recoveryArgs = await buildDownloadCommand({ id: 'selftest-recovery', url: TEST_VIDEO_URL, mode: 'video', height: 'best', title: 'self-test', settings: testSettings }, true);
     const commandOk = videoArgs.includes('[height<=?1080]') || videoArgs.some((v) => v.includes('[height<=?1080]'));
     const mp4CompatibilityOk = videoArgs.some((v) => v.includes('[vcodec^=avc]')) && videoArgs.some((v) => v.includes('[acodec^=mp4a]'));
     const denoRuntimeOk = videoArgs.includes(`deno:${DENO_BIN}`) && videoArgs.includes('ejs:github');
     const expectedTempArg = `temp:${jobTempDir({ id: 'selftest-video', settings: testSettings })}`;
     const progressPipelineOk = videoArgs.some((v) => v.includes('progress.downloaded_bytes')) && videoArgs.some((v) => v.includes('postprocess:__LOCALTUBE_POSTPROCESS__')) && videoArgs.includes(expectedTempArg);
     const audioOk = audioArgs.includes('--extract-audio') && audioArgs.includes('--audio-format');
+    const youtubeRecoveryOk = recoveryArgs.includes('--extractor-args') && recoveryArgs.includes('youtube:player_client=default,web_embedded') &&
+      youtubeNeedsClientRecovery('[youtube] x: The page needs to be reloaded.') &&
+      youtubeNeedsClientRecovery('tv_downgraded player response playability status: UNPLAYABLE') && !youtubeNeedsClientRecovery('ordinary network error');
     const urlValidationOk = youtubeUrlOk(TEST_VIDEO_URL) && youtubeUrlOk(`https://youtu.be/${TEST_VIDEO_ID}`) &&
       youtubeUrlOk(`https://www.youtube.com/shorts/${TEST_VIDEO_ID}`) && youtubeUrlOk('https://www.youtube.com/playlist?list=PL123') &&
       !youtubeUrlOk('https://www.youtube.com/@channel') && !youtubeUrlOk('https://youtube.com.evil.example/watch?v=x') && !youtubeUrlOk('file:///etc/passwd');
-    const ok = Boolean(status.ready) && staticOk.every(Boolean) && commandOk && mp4CompatibilityOk && denoRuntimeOk && progressPipelineOk && audioOk && urlValidationOk;
+    const ok = Boolean(status.ready) && staticOk.every(Boolean) && commandOk && mp4CompatibilityOk && denoRuntimeOk && progressPipelineOk && audioOk && youtubeRecoveryOk && urlValidationOk;
     console.log(JSON.stringify({
       ok, runtime: status, static_files: staticOk,
-      command_builder: { video_cap: commandOk, mp4_compatibility: mp4CompatibilityOk, deno_ejs_runtime: denoRuntimeOk, progress_pipeline: progressPipelineOk, audio: audioOk },
+      command_builder: { video_cap: commandOk, mp4_compatibility: mp4CompatibilityOk, deno_ejs_runtime: denoRuntimeOk, progress_pipeline: progressPipelineOk, audio: audioOk, youtube_recovery: youtubeRecoveryOk },
       url_validation: urlValidationOk,
     }, null, 2));
     Deno.exit(ok ? 0 : 2);
