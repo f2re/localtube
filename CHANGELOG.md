@@ -1,5 +1,13 @@
 # 🗒️ Changelog
 
+## 1.4.7 — 2026-10-06
+
+- macOS source checkout больше не падает с ложным сообщением `Повреждён архив: отсутствует .../payload/app/server.ts`, если пользователь запускает `./installer/install.sh` напрямую;
+- `installer/install.sh` теперь определяет git/source layout и передаёт управление штатному `./INSTALL.command`, который формирует временный production-layout;
+- установка через `sudo`/root явно блокируется: LocalTube — пользовательское приложение с LaunchAgent и должно устанавливаться от обычного пользователя;
+- исправлен устаревший баннер установщика `1.4.5`;
+- добавлен regression-check прямого source-entry на macOS.
+
 ## 1.4.6 — 2026-10-06
 
 - добавлено автоматическое восстановление при ошибке YouTube/yt-dlp `The page needs to be reloaded` и `tv_downgraded ... UNPLAYABLE`;

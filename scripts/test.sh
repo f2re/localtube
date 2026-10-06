@@ -66,6 +66,9 @@ if [ "$(uname -s 2>/dev/null || true)" = Darwin ]; then
   _layout_out="$(./INSTALL.command --layout-self-test)"
   printf '%s\n' "$_layout_out"
   printf '%s\n' "$_layout_out" | grep -q 'source-checkout layout self-test: OK'
+  _direct_layout_out="$(./installer/install.sh --layout-self-test)"
+  printf '%s\n' "$_direct_layout_out"
+  printf '%s\n' "$_direct_layout_out" | grep -q 'source-checkout layout self-test: OK'
 else
   echo 'SKIP: source-checkout .app synthesis is macOS-specific'
 fi
