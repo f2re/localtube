@@ -2,8 +2,8 @@
 
 1. Обновить `app/VERSION` и `CHANGELOG.md`.
 2. Выполнить `./scripts/test.sh`.
-3. Push в `main` и дождаться зелёного CI на Linux, Windows и macOS.
-4. Создать тег `vX.Y.Z`.
+3. Влить изменение версии в `main` и дождаться зелёного CI на Linux, Windows и macOS.
+4. Изменение `app/VERSION` автоматически запускает workflow `Release`, который создаёт тег `vX.Y.Z` и GitHub Release. Ручной tag-push и `workflow_dispatch` остаются аварийным способом повторного запуска; tag обязан совпадать с `app/VERSION`.
 5. Workflow `Release` собирает и публикует:
    - `LocalTube-macOS-vX.Y.Z.zip` + `.sha256`;
    - `LocalTube-macOS-vX.Y.Z.dmg` + `.sha256`;

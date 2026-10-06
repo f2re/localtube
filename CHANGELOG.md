@@ -1,5 +1,13 @@
 # 🗒️ Changelog
 
+## 1.4.6 — 2026-10-06
+
+- добавлено автоматическое восстановление при ошибке YouTube/yt-dlp `The page needs to be reloaded` и `tv_downgraded ... UNPLAYABLE`;
+- проверка метаданных и загрузка при таком сбое повторяются через совместимый `youtube:player_client=default,web_embedded`, без принудительного выбора этого клиента для обычных загрузок;
+- перед повторной загрузкой приватный LocalTube `yt-dlp` безопасно обновляется до nightly с существующим rollback; внешний fallback-runtime не изменяется;
+- self-test/CI теперь проверяют ветку восстановления совместимости YouTube;
+- Release workflow публикует `vX.Y.Z` автоматически при изменении `app/VERSION` в `main`.
+
 ## 1.4.5
 
 - macOS installer distinguishes managed LocalTube jobs from orphan/manual `yt-dlp`/FFmpeg processes.
