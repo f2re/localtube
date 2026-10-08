@@ -1029,7 +1029,13 @@ if (Deno.args.includes('--self-test')) {
     const audioOk = audioArgs.includes('--extract-audio') && audioArgs.includes('--audio-format');
     const youtubeRecoveryOk = recoveryArgs.includes('--extractor-args') && recoveryArgs.includes('youtube:player_client=default,web_embedded') &&
       youtubeNeedsClientRecovery('[youtube] x: The page needs to be reloaded.') &&
-      youtubeNeedsClientRecovery('tv_downgraded player response playability status: UNPLAYABLE') && !youtubeNeedsClientRecovery('ordinary network error');
+      youtubeNeedsClientRecovery('tv_downgraded player response playability status: UNPLAYABLE') &&
+      youtubeNeedsClientRecovery('ERROR: Requested format is not available') &&
+      youtubeNeedsClientRecovery('ERROR: No video formats found') &&
+      youtubeNeedsClientRecovery('Some web client https formats have been skipped as they are missing a URL. YouTube is forcing SABR streaming. ERROR: Video unavailable') &&
+      !youtubeNeedsClientRecovery('ERROR: Sign in to confirm you are not a bot. Requested format is not available') &&
+      !youtubeNeedsClientRecovery('ERROR: This is a private video. No video formats found') &&
+      !youtubeNeedsClientRecovery('ordinary network error');
     const urlValidationOk = youtubeUrlOk(TEST_VIDEO_URL) && youtubeUrlOk(`https://youtu.be/${TEST_VIDEO_ID}`) &&
       youtubeUrlOk(`https://www.youtube.com/shorts/${TEST_VIDEO_ID}`) && youtubeUrlOk('https://www.youtube.com/playlist?list=PL123') &&
       !youtubeUrlOk('https://www.youtube.com/@channel') && !youtubeUrlOk('https://youtube.com.evil.example/watch?v=x') && !youtubeUrlOk('file:///etc/passwd');
