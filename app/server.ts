@@ -405,8 +405,15 @@ async function commonYtdlpArgs(settings: Settings, recovery = false): Promise<st
 }
 
 function youtubeNeedsClientRecovery(text: string): boolean {
+  // Only retry extractor/client failures. Authentication, private videos, age gates,
+  // copyright and paid-content restrictions must never trigger client switching.
+  if (/sign in|login required|not a bot|age.restrict|private video|members.only|premium|purchase|rent this|copyright|not available in your country|geo.restrict/i.test(text)) return false;
   return /the page needs to be reloaded/i.test(text) ||
-    /tv_downgraded.*player response playability status:\s*UNPLAYABLE/i.test(text);
+    /tv_downgraded.*player response playability status:\s*UNPLAYABLE/i.test(text) ||
+    /requested format is not available/i.test(text) ||
+    /only images are available for download/i.test(text) ||
+    /no video formats found/i.test(text) ||
+    /video unavailable/i.test(text) && /sabr|missing a url|player response playability status:\s*UNPLAYABLE/i.test(text);
 }
 
 async function inspectVideo(url: string, settings: Settings): Promise<Json> {
@@ -688,7 +695,7 @@ class JobManager {
       let status = await runAttempt(false);
       if (!status.success && !j.cancel_requested && youtubeNeedsClientRecovery(j.logs.slice(-50).join('\n'))) {
         j.error = ''; j.phase = 'Восстановление совместимости YouTube'; j.postprocessing = false; j.speed = ''; j.eta = '';
-        this.log(j, '[LocalTube] YouTube отклонил стандартный клиент. Обновляю yt-dlp и повторяю через совместимый web-клиент.');
+        this.log(j, '[LocalTube] Ошибка извлечения потоков YouTube. Обновляю yt-dlp и повторяю через web_embedded; ограничения доступа не обходятся.');
         await this.persist();
         if (!(await isExternalToolWrapper(YTDLP, 'yt-dlp'))) {
           try {
