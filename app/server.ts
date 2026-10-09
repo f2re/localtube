@@ -1,4 +1,4 @@
-// LocalTube 1.4.7 — dependency-free cross-platform Deno backend.
+// LocalTube 1.4.8 — dependency-free cross-platform Deno backend.
 // No npm/jsr imports: the service remains usable offline after installation.
 
 declare const Deno: any;
@@ -405,8 +405,15 @@ async function commonYtdlpArgs(settings: Settings, recovery = false): Promise<st
 }
 
 function youtubeNeedsClientRecovery(text: string): boolean {
+  // Only retry extractor/client failures. Authentication, private videos, age gates,
+  // copyright and paid-content restrictions must never trigger client switching.
+  if (/sign in|login required|not a bot|age.restrict|private video|members.only|premium|purchase|rent this|copyright|not available in your country|geo.restrict/i.test(text)) return false;
   return /the page needs to be reloaded/i.test(text) ||
-    /tv_downgraded.*player response playability status:\s*UNPLAYABLE/i.test(text);
+    /tv_downgraded.*player response playability status:\s*UNPLAYABLE/i.test(text) ||
+    /requested format is not available/i.test(text) ||
+    /only images are available for download/i.test(text) ||
+    /no video formats found/i.test(text) ||
+    /video unavailable/i.test(text) && /sabr|missing a url|player response playability status:\s*UNPLAYABLE/i.test(text);
 }
 
 async function inspectVideo(url: string, settings: Settings): Promise<Json> {
@@ -688,7 +695,7 @@ class JobManager {
       let status = await runAttempt(false);
       if (!status.success && !j.cancel_requested && youtubeNeedsClientRecovery(j.logs.slice(-50).join('\n'))) {
         j.error = ''; j.phase = 'Восстановление совместимости YouTube'; j.postprocessing = false; j.speed = ''; j.eta = '';
-        this.log(j, '[LocalTube] YouTube отклонил стандартный клиент. Обновляю yt-dlp и повторяю через совместимый web-клиент.');
+        this.log(j, '[LocalTube] Ошибка извлечения потоков YouTube. Обновляю yt-dlp и повторяю через web_embedded; ограничения доступа не обходятся.');
         await this.persist();
         if (!(await isExternalToolWrapper(YTDLP, 'yt-dlp'))) {
           try {
@@ -1022,7 +1029,13 @@ if (Deno.args.includes('--self-test')) {
     const audioOk = audioArgs.includes('--extract-audio') && audioArgs.includes('--audio-format');
     const youtubeRecoveryOk = recoveryArgs.includes('--extractor-args') && recoveryArgs.includes('youtube:player_client=default,web_embedded') &&
       youtubeNeedsClientRecovery('[youtube] x: The page needs to be reloaded.') &&
-      youtubeNeedsClientRecovery('tv_downgraded player response playability status: UNPLAYABLE') && !youtubeNeedsClientRecovery('ordinary network error');
+      youtubeNeedsClientRecovery('tv_downgraded player response playability status: UNPLAYABLE') &&
+      youtubeNeedsClientRecovery('ERROR: Requested format is not available') &&
+      youtubeNeedsClientRecovery('ERROR: No video formats found') &&
+      youtubeNeedsClientRecovery('Some web client https formats have been skipped as they are missing a URL. YouTube is forcing SABR streaming. ERROR: Video unavailable') &&
+      !youtubeNeedsClientRecovery('ERROR: Sign in to confirm you are not a bot. Requested format is not available') &&
+      !youtubeNeedsClientRecovery('ERROR: This is a private video. No video formats found') &&
+      !youtubeNeedsClientRecovery('ordinary network error');
     const urlValidationOk = youtubeUrlOk(TEST_VIDEO_URL) && youtubeUrlOk(`https://youtu.be/${TEST_VIDEO_ID}`) &&
       youtubeUrlOk(`https://www.youtube.com/shorts/${TEST_VIDEO_ID}`) && youtubeUrlOk('https://www.youtube.com/playlist?list=PL123') &&
       !youtubeUrlOk('https://www.youtube.com/@channel') && !youtubeUrlOk('https://youtube.com.evil.example/watch?v=x') && !youtubeUrlOk('file:///etc/passwd');
