@@ -7,6 +7,12 @@ echo '[1/11] shell syntax'
 /bin/bash -n installer/install.sh installer/install-linux.sh app/scripts/*.sh scripts/ci_linux_integration.sh scripts/test_bootstrap_resilience.sh
 for f in INSTALL.command control/*.command control/linux/localtube; do /bin/sh -n "$f"; done
 
+# Git must preserve the direct macOS installer entrypoint as executable.
+if [ ! -x installer/install.sh ]; then
+  echo 'installer/install.sh must have Git executable mode 100755' >&2
+  exit 1
+fi
+
 echo '[2/11] TypeScript / JavaScript'
 tsc --noEmit --target ES2022 --lib ES2022,DOM --skipLibCheck app/server.ts
 node --check app/static/app.js
